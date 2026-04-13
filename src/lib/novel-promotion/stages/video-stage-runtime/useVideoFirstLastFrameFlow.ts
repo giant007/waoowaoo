@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { countWords } from '@/lib/word-count'
 import type {
   VideoGenerationOptions,
   VideoModelOption,
@@ -37,6 +38,61 @@ function toFieldLabel(field: string): string {
   return field.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase())
 }
 
+function estimateDurationFromSourceText(text: string | undefined): number | undefined {
+  const normalizedText = typeof text === 'string' ? text.trim() : ''
+  if (!normalizedText) return undefined
+  const wordCount = countWords(normalizedText)
+  if (wordCount <= 0) return undefined
+  return Math.max(2, Math.min(12, Math.ceil(wordCount / 8)))
+}
+
+function getPanelPlaybackDuration(panel: VideoPanel | null | undefined): number | undefined {
+  if (!panel) return undefined
+  return panel.textPanel?.duration
+    ?? estimateDurationFromSourceText(panel.textPanel?.text_segment || panel.textPanel?.description)
+}
+
+function getPanelKey(panel: VideoPanel | null | undefined): string | null {
+  if (!panel) return null
+  return `${panel.storyboardId}-${panel.panelIndex}`
+}
+
+function pickNearestNumberOption(
+  options: VideoGenerationOptionValue[],
+  target: number,
+): number | undefined {
+  const numericOptions = options.filter((option): option is number => typeof option === 'number')
+  if (numericOptions.length === 0) return undefined
+
+  return numericOptions.reduce((best, current) => {
+    const currentDistance = Math.abs(current - target)
+    const bestDistance = Math.abs(best - target)
+    if (currentDistance !== bestDistance) {
+      return currentDistance < bestDistance ? current : best
+    }
+    return current < best ? current : best
+  })
+}
+
+function toCapabilityFields(
+  definitions: ReturnType<typeof resolveEffectiveVideoCapabilityDefinitions>,
+  effectiveFields: ReturnType<typeof resolveEffectiveVideoCapabilityFields>,
+): FirstLastFrameCapabilityField[] {
+  const effectiveFieldMap = new Map(effectiveFields.map((field) => [field.field, field]))
+  return definitions.map((definition) => {
+    const effectiveField = effectiveFieldMap.get(definition.field)
+    const enabledOptions = effectiveField?.options ?? []
+    return {
+      field: definition.field,
+      label: toFieldLabel(definition.field),
+      options: definition.options as VideoGenerationOptionValue[],
+      disabledOptions: (definition.options as VideoGenerationOptionValue[])
+        .filter((option) => !enabledOptions.includes(option)),
+      value: effectiveField?.value as VideoGenerationOptionValue | undefined,
+    }
+  })
+}
+
 interface UseVideoFirstLastFrameFlowParams {
   allPanels: VideoPanel[]
   linkedPanels: Map<string, boolean>
@@ -71,6 +127,7 @@ export function useVideoFirstLastFrameFlow({
   const [flModel, setFlModel] = useState(firstLastFrameModelOptions[0]?.value || '')
   const [flGenerationOptions, setFlGenerationOptions] = useState<VideoGenerationOptions>({})
   const [flCustomPrompts, setFlCustomPrompts] = useState<Map<string, string>>(new Map())
+  const [isDurationManuallyPinned, setIsDurationManuallyPinned] = useState(false)
 
   useEffect(() => {
     setFlCustomPrompts((previous) => {
@@ -134,6 +191,64 @@ export function useVideoFirstLastFrameFlow({
     })
   }, [flCapabilityDefinitions, flPricingTiers])
 
+  const resolveFlGenerationOptionsForPair = useCallback((
+    firstPanel?: VideoPanel | null,
+    lastPanel?: VideoPanel | null,
+    baseSelection?: VideoGenerationOptions,
+  ): VideoGenerationOptions => {
+    const normalizedSelection = normalizeVideoGenerationSelections({
+      definitions: flCapabilityDefinitions,
+      pricingTiers: flPricingTiers,
+      selection: baseSelection ?? flGenerationOptions,
+    })
+
+    if (isDurationManuallyPinned) {
+      return normalizedSelection
+    }
+
+    const currentDuration = getPanelPlaybackDuration(firstPanel) ?? 0
+    const lastPanelKey = getPanelKey(lastPanel)
+    const shouldMergeLastFrameDuration = !!lastPanel && !(lastPanelKey ? linkedPanels.get(lastPanelKey) : false)
+    const lastDuration = shouldMergeLastFrameDuration
+      ? (getPanelPlaybackDuration(lastPanel) ?? 0)
+      : 0
+    const totalDuration = currentDuration + lastDuration
+
+    if (totalDuration <= 0) {
+      return normalizedSelection
+    }
+
+    const effectiveFields = resolveEffectiveVideoCapabilityFields({
+      definitions: flCapabilityDefinitions,
+      pricingTiers: flPricingTiers,
+      selection: normalizedSelection,
+    })
+    const durationField = effectiveFields.find((field) => field.field === 'duration')
+    const nearestDuration = durationField
+      ? pickNearestNumberOption(durationField.options as VideoGenerationOptionValue[], totalDuration)
+      : undefined
+
+    if (nearestDuration === undefined) {
+      return normalizedSelection
+    }
+
+    return normalizeVideoGenerationSelections({
+      definitions: flCapabilityDefinitions,
+      pricingTiers: flPricingTiers,
+      selection: {
+        ...normalizedSelection,
+        duration: nearestDuration,
+      },
+      pinnedFields: ['duration'],
+    })
+  }, [
+    flCapabilityDefinitions,
+    flGenerationOptions,
+    flPricingTiers,
+    isDurationManuallyPinned,
+    linkedPanels,
+  ])
+
   const flEffectiveCapabilityFields = useMemo(
     () => resolveEffectiveVideoCapabilityFields({
       definitions: flCapabilityDefinitions,
@@ -142,29 +257,14 @@ export function useVideoFirstLastFrameFlow({
     }),
     [flCapabilityDefinitions, flGenerationOptions, flPricingTiers],
   )
-  const flEffectiveFieldMap = useMemo(
-    () => new Map(flEffectiveCapabilityFields.map((field) => [field.field, field])),
-    [flEffectiveCapabilityFields],
-  )
   const flDefinitionFieldMap = useMemo(
     () => new Map(flCapabilityDefinitions.map((definition) => [definition.field, definition])),
     [flCapabilityDefinitions],
   )
 
   const flCapabilityFields: FirstLastFrameCapabilityField[] = useMemo(() => {
-    return flCapabilityDefinitions.map((definition) => {
-      const effectiveField = flEffectiveFieldMap.get(definition.field)
-      const enabledOptions = effectiveField?.options ?? []
-      return {
-        field: definition.field,
-        label: toFieldLabel(definition.field),
-        options: definition.options as VideoGenerationOptionValue[],
-        disabledOptions: (definition.options as VideoGenerationOptionValue[])
-          .filter((option) => !enabledOptions.includes(option)),
-        value: effectiveField?.value as VideoGenerationOptionValue | undefined,
-      }
-    })
-  }, [flCapabilityDefinitions, flEffectiveFieldMap])
+    return toCapabilityFields(flCapabilityDefinitions, flEffectiveCapabilityFields)
+  }, [flCapabilityDefinitions, flEffectiveCapabilityFields])
 
   const flMissingCapabilityFields = useMemo(
     () => flEffectiveCapabilityFields
@@ -178,6 +278,9 @@ export function useVideoFirstLastFrameFlow({
     if (!definitionField || definitionField.options.length === 0) return
     const parsedValue = parseByOptionType(rawValue, definitionField.options[0])
     if (!definitionField.options.includes(parsedValue)) return
+    if (field === 'duration') {
+      setIsDurationManuallyPinned(true)
+    }
     setFlGenerationOptions((previous) => ({
       ...normalizeVideoGenerationSelections({
         definitions: flCapabilityDefinitions,
@@ -212,19 +315,63 @@ export function useVideoFirstLastFrameFlow({
     generationOptions?: VideoGenerationOptions,
     firstPanelId?: string,
   ) => {
+    const firstPanel = allPanels.find(
+      (panel) =>
+        panel.storyboardId === firstStoryboardId
+        && panel.panelIndex === firstPanelIndex,
+    )
+    const lastPanel = allPanels.find(
+      (panel) =>
+        panel.storyboardId === lastStoryboardId
+        && panel.panelIndex === lastPanelIndex,
+    )
     const persistedCustomPrompt = allPanels.find(
       (panel) =>
         panel.storyboardId === firstStoryboardId
         && panel.panelIndex === firstPanelIndex,
     )?.firstLastFramePrompt
     const customPrompt = flCustomPrompts.get(panelKey) ?? persistedCustomPrompt
+
+    const resolvedGenerationOptions = resolveFlGenerationOptionsForPair(
+      firstPanel,
+      lastPanel,
+      generationOptions ?? flGenerationOptions,
+    )
+
     await onGenerateVideo(firstStoryboardId, firstPanelIndex, flModel, {
       lastFrameStoryboardId: lastStoryboardId,
       lastFramePanelIndex: lastPanelIndex,
       flModel,
       customPrompt,
-    }, generationOptions ?? flGenerationOptions, firstPanelId)
-  }, [allPanels, flCustomPrompts, flGenerationOptions, flModel, onGenerateVideo])
+    }, resolvedGenerationOptions, firstPanelId)
+  }, [
+    allPanels,
+    flCustomPrompts,
+    flGenerationOptions,
+    flModel,
+    onGenerateVideo,
+    resolveFlGenerationOptionsForPair,
+  ])
+
+  const getFlConfigurationForPair = useCallback((
+    firstPanel?: VideoPanel | null,
+    lastPanel?: VideoPanel | null,
+  ) => {
+    const generationOptions = resolveFlGenerationOptionsForPair(firstPanel, lastPanel)
+    const effectiveFields = resolveEffectiveVideoCapabilityFields({
+      definitions: flCapabilityDefinitions,
+      pricingTiers: flPricingTiers,
+      selection: generationOptions,
+    })
+
+    return {
+      generationOptions,
+      capabilityFields: toCapabilityFields(flCapabilityDefinitions, effectiveFields),
+      missingCapabilityFields: effectiveFields
+        .filter((field) => field.options.length === 0 || field.value === undefined)
+        .map((field) => field.field),
+    }
+  }, [flCapabilityDefinitions, flPricingTiers, resolveFlGenerationOptionsForPair])
 
   const getDefaultFlPrompt = useCallback((firstPrompt?: string, lastPrompt?: string): string => {
     const first = firstPrompt || ''
@@ -259,6 +406,7 @@ export function useVideoFirstLastFrameFlow({
     setFlCustomPrompt,
     resetFlCustomPrompt,
     handleGenerateFirstLastFrame,
+    getFlConfigurationForPair,
     getDefaultFlPrompt,
     getNextPanel,
     isLinkedAsLastFrame,

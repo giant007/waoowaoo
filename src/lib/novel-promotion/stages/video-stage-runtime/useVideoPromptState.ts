@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { logError as _ulogError } from '@/lib/logging/core'
 import type { VideoPanel } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
 
-export type PromptField = 'videoPrompt' | 'firstLastFramePrompt'
+export type PromptField = 'videoPrompt' | 'firstLastFramePrompt' | 'srtSegment'
 
 interface UseVideoPromptStateParams {
   allPanels: VideoPanel[]
@@ -41,6 +41,7 @@ export function useVideoPromptState({
         const promptEntries: Array<[PromptField, string]> = [
           ['videoPrompt', panel.textPanel?.video_prompt || ''],
           ['firstLastFramePrompt', panel.firstLastFramePrompt || ''],
+          ['srtSegment', panel.textPanel?.text_segment || ''],
         ]
         for (const [field, value] of promptEntries) {
           const stateKey = buildPromptStateKey(panelKey, field)
@@ -83,6 +84,10 @@ export function useVideoPromptState({
         externalPromptMap.set(
           buildPromptStateKey(panelKey, 'firstLastFramePrompt'),
           panel.firstLastFramePrompt || '',
+        )
+        externalPromptMap.set(
+          buildPromptStateKey(panelKey, 'srtSegment'),
+          panel.textPanel?.text_segment || '',
         )
       }
       const next = new Set(prev)

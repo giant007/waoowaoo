@@ -41,6 +41,7 @@ import type {
   OpenAICompatMediaTemplateSource,
 } from '@/lib/openai-compat-media-template'
 import { validateOpenAICompatMediaTemplate } from '@/lib/user-api/model-template/validator'
+import { logError as _ulogError } from '@/lib/logging/core'
 
 type ApiModeType = 'gemini-sdk' | 'openai-official'
 type GatewayRouteType = 'official' | 'openai-compat'
@@ -1649,6 +1650,16 @@ function validateCapabilitySelectionsAgainstModels(
   }
 }
 
+function decryptProviderApiKeyForDisplay(providerId: string, encryptedApiKey?: string): string {
+  if (!encryptedApiKey) return ''
+  try {
+    return decryptApiKey(encryptedApiKey)
+  } catch (error) {
+    _ulogError(`[api-config] failed to decrypt provider apiKey for display: ${providerId}`, error)
+    return ''
+  }
+}
+
 export const GET = apiHandler(async () => {
   const authResult = await requireUserAuth()
   if (isErrorResponse(authResult)) return authResult
@@ -1678,7 +1689,7 @@ export const GET = apiHandler(async () => {
 
   const providers = parseStoredProviders(pref?.customProviders).map((provider) => ({
     ...provider,
-    apiKey: provider.apiKey ? decryptApiKey(provider.apiKey) : '',
+    apiKey: decryptProviderApiKeyForDisplay(provider.id, provider.apiKey),
   }))
 
   const billingMode = await getBillingMode()

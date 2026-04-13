@@ -45,6 +45,8 @@ import {
   shouldResolveVideoSubmissionLock,
   type VideoSubmissionBaseline,
 } from './video-stage-runtime/immediate-video-submission'
+import { normalizeDurationMultiplier } from './video-stage-runtime/duration'
+import type { Character } from '@/types/project'
 
 export type { VideoStageShellProps } from './video-stage-runtime/types'
 
@@ -68,6 +70,7 @@ export function useVideoStageRuntime({
   episodeId,
   storyboards,
   clips,
+  characters = [],
   defaultVideoModel,
   capabilityOverrides,
   videoRatio = '16:9',
@@ -108,11 +111,17 @@ export function useVideoStageRuntime({
     projectId,
     storyboards,
   })
+  const [durationMultiplierInput, setDurationMultiplierInput] = useState('1.0')
+  const durationMultiplier = useMemo(() => {
+    const parsed = Number(durationMultiplierInput)
+    return normalizeDurationMultiplier(parsed)
+  }, [durationMultiplierInput])
   const { allPanels } = useVideoPanelsProjection({
     storyboards,
     clips,
     panelVideoStates,
     panelLipStates,
+    durationMultiplier,
   })
 
   const {
@@ -185,6 +194,7 @@ export function useVideoStageRuntime({
   const [isBatchConfigOpen, setIsBatchConfigOpen] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
   const [isSubmittingVideoBatch, setIsSubmittingVideoBatch] = useState(false)
+  const [isExportingSourceTexts, setIsExportingSourceTexts] = useState(false)
   const [submittingVideoPanelKeys, setSubmittingVideoPanelKeys] = useState<Set<string>>(new Set())
   const [submittingVideoBaselines, setSubmittingVideoBaselines] = useState<Map<string, VideoSubmissionBaseline>>(new Map())
   const [batchSelectedModel, setBatchSelectedModel] = useState('')
@@ -386,15 +396,13 @@ export function useVideoStageRuntime({
   const {
     flModel,
     flModelOptions,
-    flGenerationOptions,
-    flCapabilityFields,
-    flMissingCapabilityFields,
     flCustomPrompts,
     setFlModel,
     setFlCapabilityValue,
     setFlCustomPrompt,
     resetFlCustomPrompt,
     handleGenerateFirstLastFrame,
+    getFlConfigurationForPair,
     getDefaultFlPrompt,
     getNextPanel,
     isLinkedAsLastFrame,
@@ -471,6 +479,33 @@ export function useVideoStageRuntime({
       }
     })
   ), [allPanels, isSubmittingVideoBatch, submittingVideoPanelKeys])
+  const totalDurationSeconds = useMemo(() => {
+    return projectedPanels.reduce((sum, panel, index) => {
+      const currentDuration = panel.textPanel?.duration ?? 0
+      if (currentDuration <= 0) return sum
+
+      if (index > 0) {
+        const previousPanel = projectedPanels[index - 1]
+        const previousPanelKey = `${previousPanel.storyboardId}-${previousPanel.panelIndex}`
+        if (linkedPanels.get(previousPanelKey)) {
+          return sum
+        }
+      }
+
+      const panelKey = `${panel.storyboardId}-${panel.panelIndex}`
+      if (!linkedPanels.get(panelKey) || index >= projectedPanels.length - 1) {
+        return sum + currentDuration
+      }
+
+      const nextPanel = projectedPanels[index + 1]
+      const nextPanelKey = `${nextPanel.storyboardId}-${nextPanel.panelIndex}`
+      const nextDuration = linkedPanels.get(nextPanelKey)
+        ? 0
+        : (nextPanel.textPanel?.duration ?? 0)
+
+      return sum + currentDuration + nextDuration
+    }, 0)
+  }, [linkedPanels, projectedPanels])
 
   const runningCount = projectedPanels.filter((panel) => panel.videoTaskRunning || panel.lipSyncTaskRunning).length
   const failedCount = allPanels.filter((panel) => !!panel.videoErrorMessage || !!panel.lipSyncErrorMessage).length
@@ -507,20 +542,96 @@ export function useVideoStageRuntime({
     isConfirming,
   ])
 
+  const characterExportLines = useMemo(() => {
+    const normalizePanelCharacterName = (value: unknown): string => {
+      if (typeof value === 'string') return value.trim()
+      if (value && typeof value === 'object' && 'name' in value && typeof value.name === 'string') {
+        return value.name.trim()
+      }
+      return ''
+    }
+
+    const usedCharacterNames = new Set(
+      projectedPanels
+        .flatMap((panel) => panel.textPanel?.characters ?? [])
+        .map((characterName) => normalizePanelCharacterName(characterName))
+        .filter((characterName) => characterName.length > 0),
+    )
+
+    const resolveCharacterDescription = (character: Character): string => {
+      const introduction = typeof character.introduction === 'string' ? character.introduction.trim() : ''
+      if (introduction) return introduction
+
+      const appearanceDescriptions = (character.appearances || [])
+        .map((appearance) => (typeof appearance.description === 'string' ? appearance.description.trim() : ''))
+        .filter((value) => value.length > 0)
+      return appearanceDescriptions[0] || ''
+    }
+
+    return characters
+      .filter((character) => usedCharacterNames.has((character.name || '').trim()))
+      .map((character, index) => {
+        const name = typeof character.name === 'string' ? character.name.trim() : ''
+        if (!name) return null
+        const description = resolveCharacterDescription(character)
+        return `${index + 1}.${name}:${description}`
+      })
+      .filter((line): line is string => !!line)
+  }, [characters, projectedPanels])
+
+  const handleExportAllSourceTexts = useCallback(() => {
+    const shotLines = projectedPanels.map((panel, index) => {
+      const sourceText = (panel.textPanel?.text_segment || '').trim()
+      return `\u5206\u955c${index + 1}\uff1a\n${sourceText}`
+    })
+
+    if (shotLines.length === 0) {
+      window.alert(t('toolbar.exportSourceTextsEmpty'))
+      return
+    }
+
+    setIsExportingSourceTexts(true)
+    try {
+      const content = [
+        '\u3010\u89d2\u8272\u5217\u8868\u3011\uff1a',
+        ...characterExportLines,
+        '\u3010\u5206\u955c\u811a\u672c\u3011',
+        ...shotLines,
+      ].join('\n')
+      const blob = new Blob([content], {
+        type: 'text/plain;charset=utf-8',
+      })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `video-source-texts_${new Date().toISOString().slice(0, 10)}.txt`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+    } finally {
+      setIsExportingSourceTexts(false)
+    }
+  }, [characterExportLines, projectedPanels, t])
+
   return (
     <div className="space-y-6 pb-20">
       <VideoToolbar
         totalPanels={projectedPanels.length}
+        totalDurationSeconds={totalDurationSeconds}
         runningCount={runningCount}
         videosWithUrl={videosWithUrl}
         failedCount={failedCount}
         isAnyTaskRunning={isAnyTaskRunning}
         isDownloading={isDownloading}
+        isExportingSourceTexts={isExportingSourceTexts}
         onGenerateAll={handleOpenBatchGenerateModal}
         onDownloadAll={handleDownloadAllVideos}
+        onExportAllSourceTexts={handleExportAllSourceTexts}
         onBack={onBack}
         onEnterEditor={onEnterEditor}
         videosReady={videosWithUrl > 0}
+        durationMultiplier={durationMultiplierInput}
+        onDurationMultiplierChange={setDurationMultiplierInput}
       />
 
       <VideoTimelinePanel
@@ -551,9 +662,6 @@ export function useVideoStageRuntime({
         savingPrompts={savingPrompts}
         flModel={flModel}
         flModelOptions={flModelOptions}
-        flGenerationOptions={flGenerationOptions}
-        flCapabilityFields={flCapabilityFields}
-        flMissingCapabilityFields={flMissingCapabilityFields}
         flCustomPrompts={flCustomPrompts}
         onGenerateVideo={handleGenerateVideoWithImmediateLock}
         onUpdatePanelVideoModel={onUpdatePanelVideoModel}
@@ -568,6 +676,7 @@ export function useVideoStageRuntime({
         onToggleLipSyncVideo={toggleLipSyncVideo}
         getNextPanel={getNextPanel}
         isLinkedAsLastFrame={isLinkedAsLastFrame}
+        getFlConfigurationForPair={getFlConfigurationForPair}
         getDefaultFlPrompt={getDefaultFlPrompt}
         getLocalPrompt={getLocalPrompt}
         updateLocalPrompt={updateLocalPrompt}

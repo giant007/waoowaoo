@@ -201,6 +201,8 @@ export function EpisodeSelector({
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const currentEp = episodes.find(e => e.id === currentId) || episodes[0]
     const menuRef = useRef<HTMLDivElement>(null)
+    const listRef = useRef<HTMLDivElement>(null)
+    const selectedItemRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -211,6 +213,19 @@ export function EpisodeSelector({
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
+
+    useEffect(() => {
+        if (!isOpen || !listRef.current || !selectedItemRef.current) return
+
+        const frameId = window.requestAnimationFrame(() => {
+            selectedItemRef.current?.scrollIntoView({
+                block: 'center',
+                inline: 'nearest',
+            })
+        })
+
+        return () => window.cancelAnimationFrame(frameId)
+    }, [currentId, isOpen])
 
     if (!currentEp) return null
 
@@ -236,8 +251,10 @@ export function EpisodeSelector({
             </button>
 
             {isOpen && (
-                <div className="glass-surface-modal absolute left-0 top-full mt-2 w-72 origin-top-left p-2 animate-fadeIn">
-                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-1">
+                <div
+                    className="absolute left-0 top-full mt-2 w-72 origin-top-left p-2 animate-fadeIn rounded-2xl border border-[var(--glass-stroke-soft)] bg-[var(--glass-bg-surface-modal)] shadow-[0_10px_24px_rgba(15,23,42,0.10),0_2px_6px_rgba(15,23,42,0.08)]"
+                >
+                    <div ref={listRef} className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-1">
                         {episodes.map(ep => {
                             const statusColor = ep.status?.visual === 'ready'
                                 ? 'bg-[var(--glass-tone-success-fg)]'
@@ -316,6 +333,7 @@ export function EpisodeSelector({
                             return (
                                 <div
                                     key={ep.id}
+                                    ref={ep.id === currentId ? selectedItemRef : null}
                                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${ep.id === currentId
                                         ? 'bg-[var(--glass-tone-info-bg)] border border-[var(--glass-stroke-focus)]'
                                         : 'hover:bg-[var(--glass-bg-muted)] border border-transparent'

@@ -9,10 +9,12 @@ interface StoryboardHeaderProps {
   totalSegments: number
   totalPanels: number
   isDownloadingImages: boolean
+  isExportingDescriptions: boolean
   runningCount: number
   pendingPanelCount: number
   isBatchSubmitting: boolean
   onDownloadAllImages: () => void
+  onExportDescriptions: () => void
   onGenerateAllPanels: () => void
   onBack: () => void
 }
@@ -21,10 +23,12 @@ export default function StoryboardHeader({
   totalSegments,
   totalPanels,
   isDownloadingImages,
+  isExportingDescriptions,
   runningCount,
   pendingPanelCount,
   isBatchSubmitting,
   onDownloadAllImages,
+  onExportDescriptions,
   onGenerateAllPanels,
   onBack
 }: StoryboardHeaderProps) {
@@ -81,6 +85,15 @@ export default function StoryboardHeader({
           disabled={totalPanels === 0}
         >
           {isDownloadingImages ? t('header.downloading') : t('header.downloadAll')}
+        </GlassButton>
+
+        <GlassButton
+          variant="secondary"
+          loading={isExportingDescriptions}
+          onClick={onExportDescriptions}
+          disabled={totalPanels === 0}
+        >
+          {isExportingDescriptions ? t('header.exportingDescriptions') : t('header.exportDescriptions')}
         </GlassButton>
 
         <GlassButton variant="ghost" onClick={onBack}>{t('header.back')}</GlassButton>

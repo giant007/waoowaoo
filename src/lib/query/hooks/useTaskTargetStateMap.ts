@@ -42,19 +42,97 @@ type TaskTargetStateBatch = {
   targetsByKey: Map<string, TaskTargetStateQuery>
   subscribers: TaskTargetStateBatchSubscriber[]
   timer: ReturnType<typeof setTimeout> | null
+  createdAt: number
+  windowMs: number
 }
 
 const TARGET_STATE_BATCH_WINDOW_MS = 120
+const DEV_ACTIVE_BATCH_WINDOW_MS = 50
+const DEV_ACTIVE_WINDOW_THRESHOLD_MS = 2000
 const TARGET_STATE_CHUNK_SIZE = 500
 const pendingTaskTargetStateBatches = new Map<string, TaskTargetStateBatch>()
 const mergeTraceSignatureByKey = new Map<string, string>()
 const taskTargetStateLogger = createScopedLogger({
   module: 'query.use-task-target-state-map',
 })
+let hasBatchWindowActivityTracking = false
+let lastBatchWindowActivityAt = 0
 
 function traceFrontend(event: string, details: Record<string, unknown>) {
   if (typeof window === 'undefined') return
   console.info(`[FE_TASK_TRACE] ${event}`, details)
+}
+
+function markBatchWindowActivity() {
+  lastBatchWindowActivityAt = Date.now()
+}
+
+function ensureBatchWindowActivityTracking() {
+  if (typeof window === 'undefined' || hasBatchWindowActivityTracking) return
+  hasBatchWindowActivityTracking = true
+  markBatchWindowActivity()
+  const options: AddEventListenerOptions = { passive: true }
+  window.addEventListener('pointerdown', markBatchWindowActivity, options)
+  window.addEventListener('keydown', markBatchWindowActivity, options)
+  window.addEventListener('wheel', markBatchWindowActivity, options)
+  window.addEventListener('touchstart', markBatchWindowActivity, options)
+}
+
+function getBatchWindowMs() {
+  if (process.env.NODE_ENV !== 'development') return TARGET_STATE_BATCH_WINDOW_MS
+  ensureBatchWindowActivityTracking()
+  if (Date.now() - lastBatchWindowActivityAt <= DEV_ACTIVE_WINDOW_THRESHOLD_MS) {
+    return DEV_ACTIVE_BATCH_WINDOW_MS
+  }
+  return TARGET_STATE_BATCH_WINDOW_MS
+}
+
+function getLatestResourceTimingForTaskStates(requestStartedAt: number) {
+  if (typeof window === 'undefined' || typeof performance === 'undefined') return null
+  if (typeof performance.getEntriesByType !== 'function') return null
+  const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
+  const candidates = entries
+    .filter((entry) =>
+      entry.name.includes('/api/task-target-states') && entry.startTime >= requestStartedAt - 20,
+    )
+    .sort((a, b) => b.responseEnd - a.responseEnd)
+  const entry = candidates[0]
+  if (!entry) return null
+
+  const queueing = Math.max(0, entry.fetchStart - entry.startTime)
+  const dns = entry.domainLookupEnd > 0
+    ? Math.max(0, entry.domainLookupEnd - entry.domainLookupStart)
+    : 0
+  const connect = entry.connectEnd > 0
+    ? Math.max(0, entry.connectEnd - entry.connectStart)
+    : 0
+  const tls = entry.secureConnectionStart > 0
+    ? Math.max(0, entry.connectEnd - entry.secureConnectionStart)
+    : 0
+  const ttfb = entry.responseStart > 0
+    ? Math.max(0, entry.responseStart - entry.requestStart)
+    : 0
+  const download = entry.responseEnd > 0
+    ? Math.max(0, entry.responseEnd - entry.responseStart)
+    : 0
+  const total = entry.responseEnd > 0
+    ? Math.max(0, entry.responseEnd - entry.startTime)
+    : 0
+
+  return {
+    name: entry.name,
+    initiatorType: entry.initiatorType || 'unknown',
+    queueing: Number(queueing.toFixed(2)),
+    dns: Number(dns.toFixed(2)),
+    connect: Number(connect.toFixed(2)),
+    tls: Number(tls.toFixed(2)),
+    ttfb: Number(ttfb.toFixed(2)),
+    download: Number(download.toFixed(2)),
+    total: Number(total.toFixed(2)),
+    transferSize: entry.transferSize,
+    encodedBodySize: entry.encodedBodySize,
+    decodedBodySize: entry.decodedBodySize,
+  }
 }
 
 function stateKey(targetType: string, targetId: string) {
@@ -184,15 +262,29 @@ async function fetchTargetStatesChunk(
   projectId: string,
   targets: TaskTargetStateQuery[],
 ): Promise<TaskTargetState[]> {
+  const requestStartedAt = performance.now()
   const response = await apiFetch('/api/task-target-states', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ projectId, targets }),
   })
+  const fetchMs = performance.now() - requestStartedAt
   if (!response.ok) {
     throw new Error('Failed to fetch task target states')
   }
+  const serverTiming = response.headers.get('server-timing')
+  const parseStartedAt = performance.now()
   const payload = await response.json()
+  const parseMs = performance.now() - parseStartedAt
+  const resourceTiming = getLatestResourceTimingForTaskStates(requestStartedAt)
+  traceFrontend('task-state.chunk.fetch', {
+    projectId,
+    targetCount: targets.length,
+    fetchMs: Number(fetchMs.toFixed(2)),
+    parseMs: Number(parseMs.toFixed(2)),
+    serverTiming,
+    resourceTiming,
+  })
   return (payload?.states || []) as TaskTargetState[]
 }
 
@@ -203,13 +295,16 @@ async function flushTaskTargetStateBatch(projectId: string) {
   pendingTaskTargetStateBatches.delete(projectId)
   const mergedTargets = Array.from(batch.targetsByKey.values())
   const subscribers = batch.subscribers.slice()
+  const queuedMs = Date.now() - batch.createdAt
 
   try {
+    const flushStartedAt = performance.now()
     // 将 targets 按 TARGET_STATE_CHUNK_SIZE 分片，并行请求
     const chunks = chunkArray(mergedTargets, TARGET_STATE_CHUNK_SIZE)
     const chunkResults = await Promise.all(
       chunks.map((chunk) => fetchTargetStatesChunk(projectId, chunk)),
     )
+    const fetchAllMs = performance.now() - flushStartedAt
 
     // 合并所有分片的结果到统一索引
     // 用 targetQueryKey（含 types）做精确索引，避免同一 (targetType, targetId)
@@ -231,6 +326,15 @@ async function flushTaskTargetStateBatch(projectId: string) {
       }
       subscriber.resolve(subset)
     }
+    traceFrontend('task-state.batch.flush', {
+      projectId,
+      mergedTargetCount: mergedTargets.length,
+      subscriberCount: subscribers.length,
+      chunkCount: chunks.length,
+      batchWindowMs: batch.windowMs,
+      queuedMs,
+      fetchAllMs: Number(fetchAllMs.toFixed(2)),
+    })
   } catch (error) {
     for (const subscriber of subscribers) {
       subscriber.reject(error)
@@ -250,6 +354,8 @@ function fetchTaskTargetStatesBatched(
         targetsByKey: new Map<string, TaskTargetStateQuery>(),
         subscribers: [],
         timer: null,
+        createdAt: Date.now(),
+        windowMs: TARGET_STATE_BATCH_WINDOW_MS,
       }
       pendingTaskTargetStateBatches.set(batchKey, batch)
     }
@@ -264,9 +370,11 @@ function fetchTaskTargetStatesBatched(
     })
 
     if (!batch.timer) {
+      const batchWindowMs = getBatchWindowMs()
+      batch.windowMs = batchWindowMs
       batch.timer = setTimeout(() => {
         void flushTaskTargetStateBatch(batchKey)
-      }, TARGET_STATE_BATCH_WINDOW_MS)
+      }, batchWindowMs)
     }
   })
 }

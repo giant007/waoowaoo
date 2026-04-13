@@ -108,6 +108,7 @@
   "typeAudio": "Audio",
   "apiKeyLabel": "API Key",
   "apiType": "API Type",
+  "apiTypeArk": "Volcengine Ark",
   "apiTypeGeminiCompatible": "Gemini Compatible",
   "apiTypeOpenAICompatible": "OpenAI Compatible",
   "apiTypeGeminiHint": "Uses Google SDK",

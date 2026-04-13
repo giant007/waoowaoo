@@ -58,6 +58,21 @@ type ArkVideoContentItem =
     | { type: 'text'; text: string }
     | { type: 'image_url'; image_url: { url: string }; role?: 'first_frame' | 'last_frame' | 'reference_image' }
 
+function resolveArkProviderId(options: { provider?: string; modelKey?: string }): string {
+    const provider = typeof options.provider === 'string' ? options.provider.trim() : ''
+    if (provider) return provider
+
+    const modelKey = typeof options.modelKey === 'string' ? options.modelKey.trim() : ''
+    if (modelKey) {
+        const separatorIndex = modelKey.indexOf('::')
+        if (separatorIndex > 0) {
+            return modelKey.slice(0, separatorIndex)
+        }
+    }
+
+    return 'ark'
+}
+
 interface ArkSeedanceModelSpec {
     durationMin: number
     durationMax: number
@@ -160,7 +175,8 @@ export class ArkImageGenerator extends BaseImageGenerator {
     protected async doGenerate(params: ImageGenerateParams): Promise<GenerateResult> {
         const { userId, prompt, referenceImages = [], options = {} } = params
 
-        const { apiKey } = await getProviderConfig(userId, 'ark')
+        const providerId = resolveArkProviderId(options as ArkImageOptions)
+        const { apiKey } = await getProviderConfig(userId, providerId)
         const {
             aspectRatio,
             modelId = 'doubao-seedream-4-5-251128',
@@ -275,7 +291,8 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
     protected async doGenerate(params: VideoGenerateParams): Promise<GenerateResult> {
         const { userId, imageUrl, prompt = '', options = {} } = params
 
-        const { apiKey } = await getProviderConfig(userId, 'ark')
+        const providerId = resolveArkProviderId(options as ArkVideoOptions)
+        const { apiKey } = await getProviderConfig(userId, providerId)
         const {
             modelId = 'doubao-seedance-1-0-pro-fast-251015',
             resolution,
@@ -513,7 +530,7 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
                 success: true,
                 async: true,
                 requestId: taskId,  // 向后兼容
-                externalId: `ARK:VIDEO:${taskId}`  // 🔥 标准格式
+                externalId: `ARK:VIDEO:${Buffer.from(providerId, 'utf8').toString('base64url')}:${taskId}`  // 🔥 标准格式
             }
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : '未知错误'

@@ -1,4 +1,4 @@
-import type { NovelPromotionStoryboard, NovelPromotionClip, NovelPromotionPanel } from '@/types/project'
+import type { Character, Location, NovelPromotionStoryboard, NovelPromotionClip, NovelPromotionPanel } from '@/types/project'
 import type { StoryboardPanel } from './hooks/useStoryboardState'
 import type { PanelEditData } from '../PanelEditForm'
 import type { VariantData, VariantOptions } from './hooks/usePanelVariant'
@@ -12,6 +12,8 @@ export interface StoryboardGroupProps {
   textPanels: StoryboardPanel[]
   storyboardStartIndex: number
   videoRatio: string
+  characters: Character[]
+  locations: Location[]
   isExpanded: boolean
   isSubmittingStoryboardTask: boolean
   isSelectingCandidate: boolean

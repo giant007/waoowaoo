@@ -278,7 +278,6 @@ export default function CharacterCard({
           onChange={() => handleUpload()}
           className="hidden"
         />
-
         <CharacterCardHeader
           mode="selection"
           characterName={character.name}
@@ -468,7 +467,7 @@ export default function CharacterCard({
         changeReason={appearance.changeReason}
         actions={compactHeaderActions}
       />
-
+      
       <CharacterCardActions
         mode="compact"
         isPrimaryAppearance={isPrimaryAppearance}

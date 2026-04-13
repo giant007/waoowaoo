@@ -2,6 +2,8 @@
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
+import TaskStatusInline from '@/components/task/TaskStatusInline'
+import { TaskPresentationState } from '@/lib/task/presentation'
 import ImageGenerationInlineCountButton from '@/components/image-generation/ImageGenerationInlineCountButton'
 import { getImageGenerationCountOptions } from '@/lib/image-generation/count'
 import { useImageGenerationCount } from '@/lib/image-generation/use-image-generation-count'
@@ -14,6 +16,10 @@ interface ImageSectionActionButtonsProps {
   previousImageUrl?: string | null
   isSubmittingPanelImageTask: boolean
   isModifying: boolean
+  isDeleting: boolean
+  onUpload?: () => void
+  isUploading?: boolean
+  uploadPendingState?: TaskPresentationState | null
   onRegeneratePanelImage: (panelId: string, count?: number, force?: boolean) => void
   onOpenEditModal: () => void
   onOpenAIDataModal: () => void
@@ -27,6 +33,10 @@ export default function ImageSectionActionButtons({
   previousImageUrl,
   isSubmittingPanelImageTask,
   isModifying,
+  isDeleting,
+  onUpload,
+  isUploading = false,
+  uploadPendingState = null,
   onRegeneratePanelImage,
   onOpenEditModal,
   onOpenAIDataModal,
@@ -35,12 +45,27 @@ export default function ImageSectionActionButtons({
 }: ImageSectionActionButtonsProps) {
   const t = useTranslations('storyboard')
   const { count, setCount } = useImageGenerationCount('storyboard-candidates')
+  const uploadDisabled = isUploading || isSubmittingPanelImageTask || isModifying || isDeleting
 
   return (
     <>
-      <div className={`absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 transition-opacity ${isSubmittingPanelImageTask ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+      <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 transition-opacity opacity-100">
         <div className="relative glass-surface-modal border border-[var(--glass-stroke-base)] rounded-lg p-0.5">
           <div className="flex items-center gap-0.5">
+            {onUpload && (
+              <button
+                onClick={onUpload}
+                disabled={uploadDisabled}
+                className="glass-btn-base glass-btn-secondary flex items-center justify-center w-6 h-6 rounded-md text-[10px] transition-all active:scale-95 disabled:opacity-50"
+                title={imageUrl ? t('image.uploadReplace') : t('image.upload')}
+              >
+                {isUploading ? (
+                  <TaskStatusInline state={uploadPendingState} className="[&_span]:sr-only [&_svg]:text-current" />
+                ) : (
+                  <AppIcon name="upload" className="w-3 h-3" />
+                )}
+              </button>
+            )}
             <ImageGenerationInlineCountButton
               prefix={
                 <>

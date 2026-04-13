@@ -152,7 +152,7 @@ export async function handleScreenplayConvertTask(job: Job<TaskJobData>) {
                     userId: job.data.userId,
                     model: analysisModel,
                     messages: [{ role: 'user', content: prompt }],
-                    reasoning: true,
+                    reasoning: false,
                     projectId,
                     action: 'screenplay_conversion',
                     meta: {

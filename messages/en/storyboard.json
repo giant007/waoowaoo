@@ -63,6 +63,8 @@
         "generatePendingPanels": "Generate {count} panels without images",
         "downloadAll": "Download All",
         "downloading": "Packing...",
+        "exportDescriptions": "Export Descriptions",
+        "exportingDescriptions": "Exporting...",
         "noImages": "No images to download",
         "downloadAllImages": "Download all images",
         "generateVideo": "Generate Video →",
@@ -148,7 +150,11 @@
         "generateMultiple": "Generate multiple candidates",
         "generateCount": "Generate {count}",
         "generateCountSuffix": "candidates",
-        "undoShort": "Back"
+        "undoShort": "Back",
+        "upload": "Upload image",
+        "uploadReplace": "Upload replacement",
+        "uploadSuccess": "Upload succeeded!",
+        "uploadFailed": "Upload failed"
     },
     "candidate": {
         "title": "Select Candidate Image",
@@ -229,7 +235,8 @@
         "save": "Save",
         "status": "Status",
         "submitFailed": "Submit Failed",
-        "upload": "Upload"
+        "upload": "Upload",
+        "copied": "Copied"
     },
     "confirm": {
         "deletePanel": "Delete this shot? This action cannot be undone.",
@@ -371,5 +378,13 @@
     "firstLastFrame": {
         "placeholder": "Enter first/last frame video prompt...",
         "modelTitle": "First/Last Frame Model"
+    },
+    "imagePrompt": {
+        "title": "Image Prompt",
+        "copy": "Copy Image Prompt"
+    },
+    "videoPrompt": {
+        "title": "Video Prompt",
+        "copy": "Copy Video Prompt"
     }
 }

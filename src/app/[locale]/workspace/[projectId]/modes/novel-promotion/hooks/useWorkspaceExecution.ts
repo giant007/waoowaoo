@@ -199,7 +199,7 @@ export function useWorkspaceExecution({
         content: storyContent,
         model: analysisModel || undefined,
         temperature: 0.7,
-        reasoning: true,
+        reasoning: false,
       })
       if (runResult.status !== 'completed') {
         throw new Error(runResult.errorMessage || t('execution.storyToScriptFailed'))
@@ -235,7 +235,7 @@ export function useWorkspaceExecution({
         episodeId,
         model: analysisModel || undefined,
         temperature: 0.7,
-        reasoning: true,
+        reasoning: false,
       })
       if (runResult.status !== 'completed') {
         throw new Error(runResult.errorMessage || t('execution.scriptToStoryboardFailed'))

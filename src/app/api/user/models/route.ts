@@ -157,6 +157,53 @@ function hasStoredProviderApiKey(provider: StoredProvider): boolean {
   return typeof provider.apiKey === 'string' && provider.apiKey.trim().length > 0
 }
 
+function getProviderKey(providerId: string): string {
+  const separatorIndex = providerId.indexOf(':')
+  return separatorIndex === -1 ? providerId : providerId.slice(0, separatorIndex)
+}
+
+function resolveStoredProviderByIdOrKey(
+  providers: StoredProvider[],
+  providerId: string,
+): StoredProvider | null {
+  const normalizedProviderId = providerId.trim()
+  if (!normalizedProviderId) return null
+
+  const exact = providers.find((provider) => {
+    const currentId = typeof provider?.id === 'string' ? provider.id.trim() : ''
+    return currentId === normalizedProviderId
+  })
+  if (exact) return exact
+
+  const providerKey = getProviderKey(normalizedProviderId)
+  const candidates = providers.filter((provider) => {
+    const currentId = typeof provider?.id === 'string' ? provider.id.trim() : ''
+    return currentId && getProviderKey(currentId) === providerKey
+  })
+  if (candidates.length !== 1) return null
+  return candidates[0] || null
+}
+
+function getProviderInstanceSuffix(providerId: string): string {
+  const separatorIndex = providerId.indexOf(':')
+  if (separatorIndex === -1) return ''
+  return providerId.slice(separatorIndex + 1).trim()
+}
+
+function buildProviderDisplayName(input: {
+  providerId: string
+  providerName?: string
+  duplicateNameCount: number
+}): string {
+  const baseName = typeof input.providerName === 'string' && input.providerName.trim()
+    ? input.providerName.trim()
+    : input.providerId
+  const instanceSuffix = getProviderInstanceSuffix(input.providerId)
+  if (!instanceSuffix) return baseName
+  if (input.duplicateNameCount <= 1) return baseName
+  return `${baseName} [${instanceSuffix.slice(0, 8)}]`
+}
+
 function isUserSelectableModel(model: StoredModel): boolean {
   if (model.type !== 'audio') return true
   const modelId = toModelId(model)
@@ -178,15 +225,29 @@ export const GET = apiHandler(async () => {
   const providers: StoredProvider[] = parseStoredProviders(pref?.customProviders)
 
   const providerNameMap = new Map<string, string>()
+  const providerBaseNameCount = new Map<string, number>()
   const providerIdsWithApiKey = new Set<string>()
   providers.forEach((provider) => {
     const providerId = typeof provider?.id === 'string' ? provider.id.trim() : ''
     if (!providerId) return
 
-    if (provider?.name && typeof provider.name === 'string') {
-      providerNameMap.set(providerId, provider.name)
-    }
+    const storedName = typeof provider.name === 'string' ? provider.name.trim() : ''
+    const baseName = storedName || getProviderKey(providerId) || providerId
+    providerBaseNameCount.set(baseName, (providerBaseNameCount.get(baseName) || 0) + 1)
     if (hasStoredProviderApiKey(provider)) providerIdsWithApiKey.add(providerId)
+  })
+
+  providers.forEach((provider) => {
+    const providerId = typeof provider?.id === 'string' ? provider.id.trim() : ''
+    if (!providerId) return
+
+    const storedName = typeof provider.name === 'string' ? provider.name.trim() : ''
+    const baseName = storedName || getProviderKey(providerId) || providerId
+    providerNameMap.set(providerId, buildProviderDisplayName({
+      providerId,
+      providerName: storedName || undefined,
+      duplicateNameCount: providerBaseNameCount.get(baseName) || 1,
+    }))
   })
 
   const grouped: UserModelsPayload = {
@@ -206,13 +267,17 @@ export const GET = apiHandler(async () => {
     if (!modelKey) continue
 
     const provider = toProvider(model)
-    if (!provider || !providerIdsWithApiKey.has(provider)) continue
+    if (!provider) continue
+    const matchedProvider = resolveStoredProviderByIdOrKey(providers, provider)
+    if (!matchedProvider) continue
+    const matchedProviderId = typeof matchedProvider.id === 'string' ? matchedProvider.id.trim() : ''
+    if (!matchedProviderId || !providerIdsWithApiKey.has(matchedProviderId)) continue
     const modelId = toModelId(model)
     const option: UserModelOption = {
       value: modelKey,
       label: toDisplayLabel(model, modelId || modelKey),
       provider,
-      providerName: provider ? providerNameMap.get(provider) : undefined,
+      providerName: providerNameMap.get(matchedProviderId),
     }
 
     if (provider && modelId) {

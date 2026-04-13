@@ -27,6 +27,7 @@ export function useVideoPanelActions({
   isLinked,
   isLastFrame,
   nextPanel,
+  nextPanelLinkedToNext,
   prevPanel,
   hasNext,
   flModel,
@@ -37,9 +38,13 @@ export function useVideoPanelActions({
   flCustomPrompt,
   defaultFlPrompt,
   localPrompt,
+  localSourceText,
   isSavingPrompt,
+  isSavingSourceText,
   onUpdateLocalPrompt,
+  onUpdateLocalSourceText,
   onSavePrompt,
+  onSaveSourceText,
   onGenerateVideo,
   onUpdatePanelVideoModel,
   onToggleLink,
@@ -71,6 +76,9 @@ export function useVideoPanelActions({
     defaultVideoModel,
     capabilityOverrides,
     userVideoModels,
+    sourceText: panel.textPanel?.text_segment || panel.textPanel?.description || '',
+    estimatedDuration: panel.textPanel?.duration,
+    persistenceKey: panel.panelId || panelKey,
   })
 
   const player = usePanelPlayer({
@@ -86,6 +94,11 @@ export function useVideoPanelActions({
     localPrompt,
     onUpdateLocalPrompt,
     onSavePrompt,
+  })
+  const sourceTextEditor = usePanelPromptEditor({
+    localPrompt: localSourceText,
+    onUpdateLocalPrompt: onUpdateLocalSourceText,
+    onSavePrompt: onSaveSourceText,
   })
 
   const voiceManager = usePanelVoiceManager({
@@ -126,12 +139,18 @@ export function useVideoPanelActions({
       localPrompt,
       isSavingPrompt,
     },
+    sourceTextEditor: {
+      ...sourceTextEditor,
+      localPrompt: localSourceText,
+      isSavingPrompt: isSavingSourceText,
+    },
     voiceManager,
     lipSync,
     layout: {
       isLinked,
       isLastFrame,
       nextPanel,
+      nextPanelLinkedToNext,
       prevPanel,
       hasNext,
       flModel,

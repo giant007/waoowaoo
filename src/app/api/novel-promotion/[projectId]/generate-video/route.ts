@@ -13,7 +13,13 @@ import { parseModelKeyStrict, type CapabilityValue } from '@/lib/model-config-co
 import {
   resolveBuiltinCapabilitiesByModelKey,
 } from '@/lib/model-capabilities/lookup'
+import {
+  normalizeVideoGenerationSelections,
+  resolveEffectiveVideoCapabilityDefinitions,
+  resolveEffectiveVideoCapabilityFields,
+} from '@/lib/model-capabilities/video-effective'
 import { resolveBuiltinPricing } from '@/lib/model-pricing/lookup'
+import { projectVideoPricingTiersByFixedSelections } from '@/lib/model-pricing/video-tier'
 import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,6 +62,93 @@ function requireVideoModelKeyFromPayload(payload: unknown): string {
     })
   }
   return payload.videoModel
+}
+
+function pickNearestNumberOption(options: CapabilityValue[], target: number): number | undefined {
+  const numericOptions = options.filter((option): option is number => typeof option === 'number' && Number.isFinite(option))
+  if (numericOptions.length === 0) return undefined
+
+  return numericOptions.reduce((best, current) => {
+    const currentDistance = Math.abs(current - target)
+    const bestDistance = Math.abs(best - target)
+    if (currentDistance !== bestDistance) {
+      return currentDistance < bestDistance ? current : best
+    }
+    return current < best ? current : best
+  })
+}
+
+async function buildBatchPanelPayload(input: {
+  payload: Record<string, unknown>
+  panelDuration: number | null
+  projectId: string
+  userId: string
+}): Promise<Record<string, unknown>> {
+  if (!Number.isFinite(input.panelDuration) || (input.panelDuration as number) <= 0) {
+    return input.payload
+  }
+
+  const modelKey = resolveVideoModelKeyFromPayload(input.payload)
+  if (!modelKey) return input.payload
+
+  const generationMode = resolveVideoGenerationMode(input.payload)
+  const runtimeSelections = toVideoRuntimeSelections(input.payload.generationOptions)
+  const { duration: _ignoredDuration, ...runtimeSelectionsWithoutDuration } = runtimeSelections
+  const resolvedSelections = await resolveProjectModelCapabilityGenerationOptions({
+    projectId: input.projectId,
+    userId: input.userId,
+    modelType: 'video',
+    modelKey,
+    runtimeSelections: {
+      ...runtimeSelectionsWithoutDuration,
+      generationMode,
+    },
+  })
+
+  const builtinCapabilities = resolveBuiltinCapabilitiesByModelKey('video', modelKey)
+  if (!builtinCapabilities?.video) return input.payload
+
+  const pricingResolution = resolveBuiltinPricing({
+    apiType: 'video',
+    model: modelKey,
+    selections: resolvedSelections,
+  })
+  const pricingTiers = pricingResolution.status === 'resolved'
+    ? projectVideoPricingTiersByFixedSelections({
+      tiers: pricingResolution.entry.pricing.tiers ?? [],
+      fixedSelections: { generationMode },
+    })
+    : []
+  const definitions = resolveEffectiveVideoCapabilityDefinitions({
+    videoCapabilities: builtinCapabilities.video,
+    pricingTiers,
+  })
+  const effectiveFields = resolveEffectiveVideoCapabilityFields({
+    definitions,
+    pricingTiers,
+    selection: resolvedSelections,
+  })
+  const durationField = effectiveFields.find((field) => field.field === 'duration')
+  const nearestDuration = durationField
+    ? pickNearestNumberOption(durationField.options, input.panelDuration as number)
+    : undefined
+
+  if (nearestDuration === undefined) return input.payload
+
+  const normalizedSelections = normalizeVideoGenerationSelections({
+    definitions,
+    pricingTiers,
+    selection: {
+      ...resolvedSelections,
+      duration: nearestDuration,
+    },
+    pinnedFields: ['duration'],
+  })
+
+  return {
+    ...input.payload,
+    generationOptions: normalizedSelections,
+  }
 }
 
 function validateFirstLastFrameModel(input: unknown) {
@@ -205,7 +298,10 @@ export const POST = apiHandler(async (
           { videoUrl: '' },
         ],
       },
-      select: { id: true },
+      select: {
+        id: true,
+        duration: true,
+      },
     })
 
     if (panels.length === 0) {
@@ -213,8 +309,15 @@ export const POST = apiHandler(async (
     }
 
     const results = await Promise.all(
-      panels.map(async (panel) =>
-        submitTask({
+      panels.map(async (panel) => {
+        const panelPayload = await buildBatchPanelPayload({
+          payload: body,
+          panelDuration: panel.duration,
+          projectId,
+          userId: session.user.id,
+        })
+
+        return submitTask({
           userId: session.user.id,
           locale,
           requestId: getRequestId(request),
@@ -223,13 +326,13 @@ export const POST = apiHandler(async (
           type: TASK_TYPE.VIDEO_PANEL,
           targetType: 'NovelPromotionPanel',
           targetId: panel.id,
-          payload: withTaskUiPayload(body, {
+          payload: withTaskUiPayload(panelPayload, {
             hasOutputAtStart: await hasPanelVideoOutput(panel.id),
           }),
           dedupeKey: `video_panel:${panel.id}`,
-          billingInfo: buildVideoPanelBillingInfoOrThrow(body),
-        }),
-      ),
+          billingInfo: buildVideoPanelBillingInfoOrThrow(panelPayload),
+        })
+      }),
     )
 
     return NextResponse.json({ tasks: results, total: panels.length })

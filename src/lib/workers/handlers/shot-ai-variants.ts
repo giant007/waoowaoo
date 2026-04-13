@@ -104,7 +104,7 @@ export async function handleAnalyzeShotVariantsTask(job: Job<TaskJobData>, paylo
             model: novelData.analysisModel,
             prompt,
             imageUrls: [imageUrl],
-            reasoning: true,
+            reasoning: false,
             projectId: job.data.projectId,
             action: 'analyze_shot_variants',
             meta: {

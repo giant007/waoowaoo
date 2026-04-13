@@ -91,6 +91,88 @@ export function useModifyProjectStoryboardImage(projectId: string) {
 }
 
 /**
+ * 上传镜头图片（storyboard panel）
+ */
+
+export function useUploadProjectPanelImage(projectId: string) {
+    const queryClient = useQueryClient()
+    const invalidateProjectAssets = () =>
+        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+
+    type UploadPanelImageResponse = { imageKey?: string; imageUrl?: string }
+
+    return useMutation({
+        mutationFn: async ({
+            file,
+            panelId,
+            imageIndex,
+            labelText,
+        }: {
+            file: File
+            panelId: string,
+            imageIndex?: number,
+            labelText?: string
+        }) => {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('type', 'panel')
+            formData.append('id', panelId)
+            if (imageIndex !== undefined) formData.append('imageIndex', imageIndex.toString())
+            if (labelText) formData.append('labelText', labelText)
+
+            return await requestJsonWithError<UploadPanelImageResponse>(`/api/novel-promotion/${projectId}/upload-asset-image`, {
+                method: 'POST',
+                body: formData,
+            }, 'Failed to upload image')
+        },
+        onSuccess: (data: { imageKey?: string; imageUrl?: string } | undefined, variables) => {
+            const imageUrl = data?.imageUrl || data?.imageKey || null
+            if (imageUrl) {
+                const panelId = variables.panelId
+
+                const updatePanels = (storyboards: Array<{ panels?: Array<Record<string, unknown>> }>) =>
+                    storyboards.map((storyboard) => {
+                        const panels = Array.isArray(storyboard.panels) ? storyboard.panels : []
+                        let changed = false
+                        const nextPanels = panels.map((panel) => {
+                            if (panel?.id !== panelId) return panel
+                            changed = true
+                            return {
+                                ...panel,
+                                imageUrl,
+                                candidateImages: null,
+                            }
+                        })
+                        return changed ? { ...storyboard, panels: nextPanels } : storyboard
+                    })
+
+                queryClient.getQueriesData({ queryKey: ['storyboards'] }).forEach(([key, cached]) => {
+                    if (!cached || typeof cached !== 'object') return
+                    const payload = cached as { storyboards?: Array<{ panels?: Array<Record<string, unknown>> }> }
+                    if (!Array.isArray(payload.storyboards)) return
+                    const nextStoryboards = updatePanels(payload.storyboards)
+                    if (nextStoryboards !== payload.storyboards) {
+                        queryClient.setQueryData(key, { ...payload, storyboards: nextStoryboards })
+                    }
+                })
+
+                queryClient.getQueriesData({ queryKey: ['episode-data', projectId] }).forEach(([key, cached]) => {
+                    if (!cached || typeof cached !== 'object') return
+                    const episode = cached as { storyboards?: Array<{ panels?: Array<Record<string, unknown>> }> }
+                    if (!Array.isArray(episode.storyboards)) return
+                    const nextStoryboards = updatePanels(episode.storyboards)
+                    if (nextStoryboards !== episode.storyboards) {
+                        queryClient.setQueryData(key, { ...episode, storyboards: nextStoryboards })
+                    }
+                })
+            }
+
+            invalidateProjectAssets()
+        },
+    })
+}
+
+/**
  * 下载剧集全部图片（zip）
  */
 

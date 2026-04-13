@@ -1,7 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { NovelPromotionClip, NovelPromotionPanel, NovelPromotionStoryboard } from '@/types/project'
+import { Character, Location, NovelPromotionClip, NovelPromotionPanel, NovelPromotionStoryboard } from '@/types/project'
 import StoryboardGroup from './StoryboardGroup'
 import { StoryboardPanel } from './hooks/useStoryboardState'
 import { PanelEditData } from '../PanelEditForm'
@@ -11,6 +11,8 @@ import { AppIcon } from '@/components/ui/icons'
 import { GlassButton } from '@/components/ui/primitives'
 
 interface StoryboardCanvasProps {
+  characters: Character[]
+  locations: Location[]
   sortedStoryboards: NovelPromotionStoryboard[]
   videoRatio: string
   expandedClips: Set<string>
@@ -73,6 +75,8 @@ interface StoryboardCanvasProps {
 }
 
 export default function StoryboardCanvas({
+  characters,
+  locations,
   sortedStoryboards,
   videoRatio,
   expandedClips,
@@ -154,6 +158,8 @@ export default function StoryboardCanvas({
               textPanels={textPanels}
               storyboardStartIndex={storyboardStartIndex[storyboard.id]}
               videoRatio={videoRatio}
+              characters={characters}
+              locations={locations}
               isExpanded={expandedClips.has(storyboard.id)}
               isSubmittingStoryboardTask={isSubmittingStoryboardTask}
               isSelectingCandidate={isSelectingCandidate}

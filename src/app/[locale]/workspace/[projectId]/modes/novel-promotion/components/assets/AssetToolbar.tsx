@@ -46,6 +46,7 @@ export default function AssetToolbar({
     const { data: projectData } = useProjectData(projectId)
     const projectName = projectData?.name
     const [isDownloading, setIsDownloading] = useState(false)
+    const [isExportingCharacterPrompts, setIsExportingCharacterPrompts] = useState(false)
 
     const assetTaskRunningState = isBatchSubmitting
         ? resolveTaskPresentationState({
@@ -121,6 +122,58 @@ export default function AssetToolbar({
         }
     }
 
+    const handleExportCharacterPrompts = () => {
+        const characters = assets?.characters ?? []
+        const promptEntries = characters.flatMap((character) =>
+            (character.appearances ?? [])
+                .filter((appearance) => typeof appearance.description === 'string' && appearance.description.trim())
+                .map((appearance) => ({
+                    characterName: character.name,
+                    appearanceIndex: appearance.appearanceIndex,
+                    appearanceLabel:
+                        appearance.changeReason?.trim()
+                        || t('toolbar.exportCharacterPromptsAppearanceLabel', {
+                            index: appearance.appearanceIndex,
+                        }),
+                    prompt: appearance.description!.trim(),
+                })),
+        )
+
+        if (promptEntries.length === 0) {
+            alert(t('toolbar.exportCharacterPromptsEmpty'))
+            return
+        }
+
+        setIsExportingCharacterPrompts(true)
+        try {
+            const content = JSON.stringify(
+                {
+                    projectId,
+                    projectName: projectName ?? null,
+                    exportedAt: new Date().toISOString(),
+                    total: promptEntries.length,
+                    prompts: promptEntries,
+                },
+                null,
+                2,
+            )
+            const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(blob)
+            const safeName = projectName ? projectName.replace(/[/\\:*?"<>|]/g, '_') : 'assets'
+            link.download = `${safeName}_character-prompts_${new Date().toISOString().slice(0, 10)}.json`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(link.href)
+        } catch (error) {
+            _logError('导出工作区角色提示词失败:', error)
+            alert(t('toolbar.exportCharacterPromptsFailed'))
+        } finally {
+            setIsExportingCharacterPrompts(false)
+        }
+    }
+
     return (
         <div className="glass-surface p-4">
             <div className="flex items-center justify-between">
@@ -180,6 +233,22 @@ export default function AssetToolbar({
                         <span>{t("common.refresh")}</span>
                     </button>
                     {/* 打包下载按钮 */}
+                    <button
+                        onClick={handleExportCharacterPrompts}
+                        disabled={isExportingCharacterPrompts || totalAppearances === 0}
+                        title={t("toolbar.exportCharacterPrompts")}
+                        className="glass-btn-base glass-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium border border-[var(--glass-stroke-base)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <AppIcon
+                            name={isExportingCharacterPrompts ? 'refresh' : 'download'}
+                            className={`w-4 h-4 ${isExportingCharacterPrompts ? 'animate-spin' : ''}`}
+                        />
+                        <span>
+                            {isExportingCharacterPrompts
+                                ? t("toolbar.exportingCharacterPrompts")
+                                : t("toolbar.exportCharacterPrompts")}
+                        </span>
+                    </button>
                     <button
                         onClick={handleDownloadAll}
                         disabled={isDownloading || totalAssets === 0}

@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { createScopedLogger } from '@/lib/logging/core'
 import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import { toFetchableUrl as normalizeFetchableUrl } from '@/lib/storage/utils'
 
 type StorageHelpers = Pick<typeof import('@/lib/storage'), 'getSignedUrl' | 'toFetchableUrl'>
 
@@ -285,7 +286,7 @@ async function signStorageKey(storageKey: string): Promise<string> {
 
 async function toFetchableAbsoluteUrl(value: string): Promise<string> {
   const { toFetchableUrl } = await getStorageHelpers()
-  return toFetchableUrl(value)
+  return normalizeFetchableUrl(toFetchableUrl(value))
 }
 
 function unwrapNextImageInternal(input: string): string {

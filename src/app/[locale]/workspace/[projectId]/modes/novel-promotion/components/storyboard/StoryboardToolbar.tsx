@@ -11,12 +11,14 @@ interface StoryboardToolbarProps {
   totalSegments: number
   totalPanels: number
   isDownloadingImages: boolean
+  isExportingDescriptions: boolean
   runningCount: number
   pendingPanelCount: number
   isBatchSubmitting: boolean
   addingStoryboardGroup: boolean
   addingStoryboardGroupState: TaskPresentationState | null
   onDownloadAllImages: () => Promise<void>
+  onExportDescriptions: () => void
   onGenerateAllPanels: () => Promise<void>
   onAddStoryboardGroupAtStart: () => void
   onBack: () => void
@@ -26,12 +28,14 @@ export default function StoryboardToolbar({
   totalSegments,
   totalPanels,
   isDownloadingImages,
+  isExportingDescriptions,
   runningCount,
   pendingPanelCount,
   isBatchSubmitting,
   addingStoryboardGroup,
   addingStoryboardGroupState,
   onDownloadAllImages,
+  onExportDescriptions,
   onGenerateAllPanels,
   onAddStoryboardGroupAtStart,
   onBack,
@@ -43,10 +47,12 @@ export default function StoryboardToolbar({
         totalSegments={totalSegments}
         totalPanels={totalPanels}
         isDownloadingImages={isDownloadingImages}
+        isExportingDescriptions={isExportingDescriptions}
         runningCount={runningCount}
         pendingPanelCount={pendingPanelCount}
         isBatchSubmitting={isBatchSubmitting}
         onDownloadAllImages={onDownloadAllImages}
+        onExportDescriptions={onExportDescriptions}
         onGenerateAllPanels={onGenerateAllPanels}
         onBack={onBack}
       />

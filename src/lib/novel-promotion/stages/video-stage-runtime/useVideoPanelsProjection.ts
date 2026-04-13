@@ -6,6 +6,10 @@ import type {
   Storyboard,
   VideoPanel,
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
+import {
+  applyDurationMultiplier,
+  estimatePanelVideoDurationFromText,
+} from './duration'
 
 interface TaskStateLike {
   phase?: string | null
@@ -21,6 +25,7 @@ interface UseVideoPanelsProjectionParams {
   clips: Clip[]
   panelVideoStates: TaskPresentationLike
   panelLipStates: TaskPresentationLike
+  durationMultiplier?: number
 }
 
 export function useVideoPanelsProjection({
@@ -28,6 +33,7 @@ export function useVideoPanelsProjection({
   clips,
   panelVideoStates,
   panelLipStates,
+  durationMultiplier = 1,
 }: UseVideoPanelsProjectionParams) {
   const sortedStoryboards = useMemo(() => {
     return [...storyboards].sort((left, right) => {
@@ -69,7 +75,10 @@ export function useVideoPanelsProjection({
             characters: charactersArray,
             location: panel.location || '',
             text_segment: panel.srtSegment || '',
-            duration: panel.duration || undefined,
+            duration: applyDurationMultiplier(
+              panel.duration ?? estimatePanelVideoDurationFromText(panel.srtSegment),
+              durationMultiplier,
+            ) || undefined,
             imagePrompt: panel.imagePrompt || undefined,
             video_prompt: panel.videoPrompt || undefined,
             videoModel: panel.videoModel || undefined,
@@ -103,7 +112,7 @@ export function useVideoPanelsProjection({
       })
     })
     return panels
-  }, [panelLipStates, panelVideoStates, sortedStoryboards])
+  }, [durationMultiplier, panelLipStates, panelVideoStates, sortedStoryboards])
 
   return {
     sortedStoryboards,

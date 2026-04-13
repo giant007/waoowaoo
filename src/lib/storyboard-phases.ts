@@ -326,7 +326,7 @@ export async function executePhase1(
                 userId: session.user.id,
                 model: novelPromotionData.analysisModel,
                 messages: [{ role: 'user', content: planPrompt }],
-                reasoning: true,
+                reasoning: false,
                 projectId,
                 action: 'storyboard_phase1_plan',
                 meta: {
@@ -429,7 +429,7 @@ export async function executePhase2(
                 userId: session.user.id,
                 model: novelPromotionData.analysisModel,
                 messages: [{ role: 'user', content: cinematographerPrompt }],
-                reasoning: true,
+                reasoning: false,
                 projectId,
                 action: 'storyboard_phase2_cinematography',
                 meta: {
@@ -515,7 +515,7 @@ export async function executePhase2Acting(
                 userId: session.user.id,
                 model: novelPromotionData.analysisModel,
                 messages: [{ role: 'user', content: actingPrompt }],
-                reasoning: true,
+                reasoning: false,
                 projectId,
                 action: 'storyboard_phase2_acting',
                 meta: {
@@ -608,7 +608,7 @@ export async function executePhase3(
                 userId: session.user.id,
                 model: novelPromotionData.analysisModel,
                 messages: [{ role: 'user', content: detailPrompt }],
-                reasoning: true,
+                reasoning: false,
                 projectId,
                 action: 'storyboard_phase3_detail',
                 meta: {

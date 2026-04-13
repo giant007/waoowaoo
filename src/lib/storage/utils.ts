@@ -2,13 +2,37 @@ import { StorageConfigError } from './errors'
 
 export const DEFAULT_SIGNED_URL_EXPIRES_SECONDS = 24 * 60 * 60
 
+function normalizeLocalDevelopmentUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl)
+    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
+
+    if (isLocalhost && !parsed.port) {
+      parsed.port = '3000'
+    }
+
+    if (process.env.NODE_ENV !== 'production' && isLocalhost && parsed.protocol === 'https:') {
+      parsed.protocol = 'http:'
+    }
+
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return rawUrl
+  }
+}
+
 export function resolveBaseUrl(): string {
-  return process.env.NEXTAUTH_URL || 'http://localhost:3000'
+  const rawBaseUrl =
+    process.env.INTERNAL_TASK_API_BASE_URL
+    || process.env.NEXTAUTH_URL
+    || 'http://127.0.0.1:3000'
+
+  return normalizeLocalDevelopmentUrl(rawBaseUrl)
 }
 
 export function toFetchableUrl(inputUrl: string): string {
   if (inputUrl.startsWith('http://') || inputUrl.startsWith('https://') || inputUrl.startsWith('data:')) {
-    return inputUrl
+    return inputUrl.startsWith('data:') ? inputUrl : normalizeLocalDevelopmentUrl(inputUrl)
   }
   if (inputUrl.startsWith('/')) {
     return `${resolveBaseUrl()}${inputUrl}`

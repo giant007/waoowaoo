@@ -1,5 +1,6 @@
 'use client'
 import { useTranslations } from 'next-intl'
+import './StoryboardGroup.css'
 
 import { useCallback, useMemo } from 'react'
 import ScreenplayDisplay from './ScreenplayDisplay'
@@ -24,6 +25,8 @@ export default function StoryboardGroup({
   textPanels,
   storyboardStartIndex,
   videoRatio,
+  characters,
+  locations,
   isExpanded,
   isSubmittingStoryboardTask,
   isSelectingCandidate,
@@ -136,7 +139,7 @@ export default function StoryboardGroup({
   )
 
   return (
-    <div className={`glass-surface-elevated p-6 relative ${failedError ? 'border-2 border-[var(--glass-stroke-danger)] bg-[var(--glass-danger-ring)]' : ''}`}>
+    <div className={`glass-surface-elevated p-6 relative storyboard-group-virtual ${failedError ? 'border-2 border-[var(--glass-stroke-danger)] bg-[var(--glass-danger-ring)]' : ''}`}>
       {failedError && (
         <StoryboardGroupFailedAlert
           failedError={failedError}
@@ -201,10 +204,13 @@ export default function StoryboardGroup({
       )}
 
       <StoryboardPanelList
+        projectId={projectId}
         storyboardId={storyboard.id}
         textPanels={textPanels}
         storyboardStartIndex={storyboardStartIndex}
         videoRatio={videoRatio}
+        characters={characters}
+        locations={locations}
         isSubmittingStoryboardTextTask={isSubmittingStoryboardTextTask}
         savingPanels={savingPanels}
         deletingPanelIds={deletingPanelIds}

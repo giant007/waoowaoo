@@ -522,7 +522,7 @@ async function handleInsertPanelTask(job: Job<TaskJobData>) {
         userId: job.data.userId,
         model: analysisModel,
         messages: [{ role: 'user', content: prompt }],
-        reasoning: true,
+        reasoning: false,
         projectId: job.data.projectId,
         action: 'insert_panel',
         meta: {

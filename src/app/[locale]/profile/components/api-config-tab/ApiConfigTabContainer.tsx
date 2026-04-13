@@ -28,7 +28,7 @@ interface TestStep {
 }
 type TestStatus = 'idle' | 'testing' | 'passed' | 'failed'
 
-type CustomProviderType = 'gemini-compatible' | 'openai-compatible'
+type CustomProviderType = 'ark' | 'gemini-compatible' | 'openai-compatible'
 
 const Icons = {
   settings: () => (
@@ -166,9 +166,13 @@ export function ApiConfigTabContainer() {
     addProvider({
       id: providerId,
       name,
-      baseUrl,
+      baseUrl: newGeminiProvider.apiType === 'ark' ? undefined : baseUrl,
       apiKey,
-      apiMode: newGeminiProvider.apiType === 'openai-compatible' ? 'openai-official' : 'gemini-sdk',
+      apiMode: newGeminiProvider.apiType === 'openai-compatible'
+        ? 'openai-official'
+        : newGeminiProvider.apiType === 'gemini-compatible'
+          ? 'gemini-sdk'
+          : undefined,
     })
 
     setNewGeminiProvider({ name: '', baseUrl: '', apiKey: '', apiType: 'gemini-compatible' })
@@ -178,8 +182,14 @@ export function ApiConfigTabContainer() {
   }, [newGeminiProvider, addProvider])
 
   const handleAddGeminiProvider = useCallback(async () => {
-    if (!newGeminiProvider.name || !newGeminiProvider.baseUrl) {
+    const requiresBaseUrl = newGeminiProvider.apiType !== 'ark'
+    if (!newGeminiProvider.name || (requiresBaseUrl && !newGeminiProvider.baseUrl)) {
       alert(tp('fillRequired'))
+      return
+    }
+
+    if (newGeminiProvider.apiType === 'ark') {
+      doAddProvider()
       return
     }
 
@@ -192,7 +202,7 @@ export function ApiConfigTabContainer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiType: newGeminiProvider.apiType,
-          baseUrl: newGeminiProvider.baseUrl.trim(),
+          ...(requiresBaseUrl ? { baseUrl: newGeminiProvider.baseUrl.trim() } : {}),
           apiKey: newGeminiProvider.apiKey.trim(),
         }),
       })
@@ -370,6 +380,7 @@ export function ApiConfigTabContainer() {
                 disabled={testStatus === 'testing'}
                 className="glass-select-base w-full cursor-pointer appearance-none px-3 py-2.5 pr-8 text-sm"
               >
+                <option value="ark">{t('apiTypeArk')}</option>
                 <option value="gemini-compatible">{t('apiTypeGeminiCompatible')}</option>
                 <option value="openai-compatible">{t('apiTypeOpenAICompatible')}</option>
               </select>
@@ -398,24 +409,26 @@ export function ApiConfigTabContainer() {
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--glass-text-primary)]">
-              {t('baseUrl')}
-            </label>
-            <input
-              type="text"
-              value={newGeminiProvider.baseUrl}
-              onChange={(event) =>
-                setNewGeminiProvider({
-                  ...newGeminiProvider,
-                  baseUrl: event.target.value,
-                })
-              }
-              disabled={testStatus === 'testing'}
-              placeholder={t('baseUrl')}
-              className="glass-input-base w-full px-3 py-2.5 text-sm font-mono"
-            />
-          </div>
+          {newGeminiProvider.apiType !== 'ark' && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[var(--glass-text-primary)]">
+                {t('baseUrl')}
+              </label>
+              <input
+                type="text"
+                value={newGeminiProvider.baseUrl}
+                onChange={(event) =>
+                  setNewGeminiProvider({
+                    ...newGeminiProvider,
+                    baseUrl: event.target.value,
+                  })
+                }
+                disabled={testStatus === 'testing'}
+                placeholder={t('baseUrl')}
+                className="glass-input-base w-full px-3 py-2.5 text-sm font-mono"
+              />
+            </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[var(--glass-text-primary)]">

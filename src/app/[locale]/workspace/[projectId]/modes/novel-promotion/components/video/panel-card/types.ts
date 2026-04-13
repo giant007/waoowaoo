@@ -18,6 +18,7 @@ export interface VideoPanelCardShellProps {
   isLinked: boolean
   isLastFrame: boolean
   nextPanel: VideoPanel | null
+  nextPanelLinkedToNext: boolean
   prevPanel: VideoPanel | null
   hasNext: boolean
   flModel: string
@@ -34,9 +35,13 @@ export interface VideoPanelCardShellProps {
   flCustomPrompt: string
   defaultFlPrompt: string
   localPrompt: string
+  localSourceText: string
   isSavingPrompt: boolean
+  isSavingSourceText: boolean
   onUpdateLocalPrompt: (value: string) => void
+  onUpdateLocalSourceText: (value: string) => void
   onSavePrompt: (value: string) => Promise<void>
+  onSaveSourceText: (value: string) => Promise<void>
   onGenerateVideo: (
     storyboardId: string,
     panelIndex: number,

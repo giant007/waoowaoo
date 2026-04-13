@@ -310,6 +310,7 @@ export function ModelCapabilityDropdown({
                                                 onClick={() => {
                                                     if (m.disabled) return
                                                     onModelChange(m.value)
+                                                    setIsOpen(false)
                                                 }}
                                                 disabled={m.disabled}
                                                 className={`w-full text-left px-4 py-2 transition-all border-l-[3px] ${value === m.value

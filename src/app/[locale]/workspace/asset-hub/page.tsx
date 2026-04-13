@@ -77,6 +77,7 @@ export default function AssetHubPage() {
     const [showAddVoice, setShowAddVoice] = useState(false)
     const [voicePickerCharacterId, setVoicePickerCharacterId] = useState<string | null>(null)
     const [isDownloading, setIsDownloading] = useState(false)
+    const [isExportingCharacterPrompts, setIsExportingCharacterPrompts] = useState(false)
 
 
     // 编辑角色弹窗状态
@@ -411,6 +412,52 @@ export default function AssetHubPage() {
         }
     }
 
+    const handleExportCharacterPrompts = () => {
+        const promptEntries = characters.flatMap((character) =>
+            character.appearances
+                .filter((appearance) => typeof appearance.description === 'string' && appearance.description.trim())
+                .map((appearance) => ({
+                    characterName: character.name,
+                    appearanceIndex: appearance.appearanceIndex,
+                    appearanceLabel:
+                        appearance.changeReason?.trim()
+                        || t('appearanceLabel', { index: appearance.appearanceIndex }),
+                    prompt: appearance.description!.trim(),
+                })),
+        )
+
+        if (promptEntries.length === 0) {
+            alert(t('exportCharacterPromptsEmpty'))
+            return
+        }
+
+        setIsExportingCharacterPrompts(true)
+        try {
+            const content = JSON.stringify(
+                {
+                    exportedAt: new Date().toISOString(),
+                    total: promptEntries.length,
+                    prompts: promptEntries,
+                },
+                null,
+                2,
+            )
+            const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(blob)
+            link.download = `character-prompts_${new Date().toISOString().slice(0, 10)}.json`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(link.href)
+        } catch (error) {
+            _ulogError('导出角色提示词失败:', error)
+            alert(t('exportCharacterPromptsFailed'))
+        } finally {
+            setIsExportingCharacterPrompts(false)
+        }
+    }
+
     return (
         <div className="glass-page min-h-screen">
             <Navbar />
@@ -454,6 +501,8 @@ export default function AssetHubPage() {
                         onAddLocation={() => setShowAddLocation(true)}
                         onAddVoice={() => setShowAddVoice(true)}
                         onDownloadAll={handleDownloadAll}
+                        onExportCharacterPrompts={handleExportCharacterPrompts}
+                        isExportingCharacterPrompts={isExportingCharacterPrompts}
                         isDownloading={isDownloading}
                         selectedFolderId={selectedFolderId}
                         onImageClick={setPreviewImage}

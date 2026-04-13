@@ -61,7 +61,7 @@ export function useUpdateProjectPanelVideoPrompt(projectId: string) {
       storyboardId: string
       panelIndex: number
       value: string
-      field?: 'videoPrompt' | 'firstLastFramePrompt'
+      field?: 'videoPrompt' | 'firstLastFramePrompt' | 'srtSegment'
     }) =>
       await requestJsonWithError(
         `/api/novel-promotion/${projectId}/panel`,
@@ -73,7 +73,9 @@ export function useUpdateProjectPanelVideoPrompt(projectId: string) {
             panelIndex,
             ...(field === 'firstLastFramePrompt'
               ? { firstLastFramePrompt: value }
-              : { videoPrompt: value }),
+              : field === 'srtSegment'
+                ? { srtSegment: value }
+                : { videoPrompt: value }),
           }),
         },
         'update failed',

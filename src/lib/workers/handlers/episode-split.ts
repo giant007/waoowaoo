@@ -131,7 +131,7 @@ export async function handleEpisodeSplitTask(job: Job<TaskJobData>) {
               model: analysisModel,
               messages: [{ role: 'user', content: prompt }],
               temperature: 0.3,
-              reasoning: true,
+              reasoning: false,
               reasoningEffort: 'high',
               projectId,
               action: 'episode_split',

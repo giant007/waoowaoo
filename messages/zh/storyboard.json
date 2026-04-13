@@ -63,6 +63,8 @@
         "generatePendingPanels": "生成{count}个未有图片的镜头",
         "downloadAll": "下载全部",
         "downloading": "打包中...",
+        "exportDescriptions": "导出画面描述",
+        "exportingDescriptions": "导出中...",
         "noImages": "没有可下载的图片",
         "downloadAllImages": "下载所有图片",
         "generateVideo": "生成视频 →",
@@ -148,7 +150,11 @@
         "generateMultiple": "生成多张候选",
         "generateCount": "生成 {count} 张",
         "generateCountSuffix": "张",
-        "undoShort": "返回"
+        "undoShort": "返回",
+        "upload": "上传图片",
+        "uploadReplace": "上传替换图片",
+        "uploadSuccess": "上传成功！",
+        "uploadFailed": "上传失败"
     },
     "candidate": {
         "title": "选择候选图",
@@ -229,7 +235,8 @@
         "save": "保存",
         "status": "状态",
         "submitFailed": "提交失败",
-        "upload": "上传"
+        "upload": "上传",
+        "copied": "已复制"
     },
     "confirm": {
         "deletePanel": "确定要删除这个镜头吗？删除后无法恢复。",
@@ -371,5 +378,13 @@
     "firstLastFrame": {
         "placeholder": "输入首尾帧视频提示词...",
         "modelTitle": "首尾帧模型"
+    },
+    "imagePrompt": {
+        "title": "图片提示词",
+        "copy": "复制图片提示词"
+    },
+    "videoPrompt": {
+        "title": "视频提示词",
+        "copy": "复制视频提示词"
     }
 }

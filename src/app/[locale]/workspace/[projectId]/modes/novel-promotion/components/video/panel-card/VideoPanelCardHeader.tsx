@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TaskStatusOverlay from '@/components/task/TaskStatusOverlay'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 
@@ -25,27 +25,57 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
 
   const [errorDismissed, setErrorDismissed] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
+  const mediaRootRef = useRef<HTMLDivElement>(null)
+  const [isInView, setIsInView] = useState(false)
 
   useEffect(() => {
     setErrorDismissed(false)
   }, [taskStatus.panelErrorDisplay?.message])
 
+  useEffect(() => {
+    const element = mediaRootRef.current
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setIsInView(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (!entry) return
+        if (entry.isIntersecting || entry.intersectionRatio > 0) {
+          setIsInView(true)
+          observer.disconnect()
+        }
+      },
+      { root: null, rootMargin: '320px', threshold: 0.01 },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
   const hasVisibleBaseVideo = !!media.baseVideoUrl
   const showFirstLastFrameSwitch = layout.hasNext
+  const shouldRenderMedia =
+    isInView || player.isPlaying || taskStatus.isVideoTaskRunning || taskStatus.isLipSyncTaskRunning
 
   return (
-    <div className="bg-[var(--glass-bg-muted)] flex items-center justify-center relative" style={{ aspectRatio: player.cssAspectRatio }}>
-      {hasVisibleBaseVideo && player.isPlaying ? (
+    <div
+      ref={mediaRootRef}
+      className="bg-[var(--glass-bg-muted)] flex items-center justify-center relative"
+      style={{ aspectRatio: player.cssAspectRatio }}
+    >
+      {shouldRenderMedia && hasVisibleBaseVideo && player.isPlaying ? (
         <video
           ref={player.videoRef}
           key={`video-${panel.storyboardId}-${panel.panelIndex}-${media.currentVideoUrl}`}
           src={media.currentVideoUrl}
           controls
+          preload="metadata"
           playsInline
           className="w-full h-full object-contain bg-black"
           onEnded={() => player.setIsPlaying(false)}
         />
-      ) : hasVisibleBaseVideo ? (
+      ) : shouldRenderMedia && hasVisibleBaseVideo ? (
         <div
           className="relative w-full h-full group cursor-pointer"
           onClick={() => void player.handlePlayClick()}
@@ -62,7 +92,7 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
             </div>
           </div>
         </div>
-      ) : panel.imageUrl ? (
+      ) : shouldRenderMedia && panel.imageUrl ? (
         <MediaImageWithLoading
           src={panel.imageUrl}
           alt={t('panelCard.shot', { number: panelIndex + 1 })}
@@ -70,6 +100,10 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
           className={`w-full h-full object-contain bg-[var(--glass-bg-muted)] ${media.onPreviewImage ? 'cursor-zoom-in' : ''}`}
           onClick={media.onPreviewImage ? player.handlePreviewImage : undefined}
         />
+      ) : !shouldRenderMedia ? (
+        <div className="w-full h-full flex items-center justify-center bg-[var(--glass-bg-muted)]">
+          <div className="w-10 h-10 rounded-full bg-[var(--glass-bg-surface)]/70 animate-pulse" />
+        </div>
       ) : (
         <AppIcon name="playCircle" className="w-16 h-16 text-[var(--glass-text-tertiary)]" />
       )}

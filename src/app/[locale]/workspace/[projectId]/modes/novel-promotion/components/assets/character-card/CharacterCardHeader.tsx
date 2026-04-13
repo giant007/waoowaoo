@@ -34,6 +34,7 @@ export default function CharacterCardHeader(props: CharacterCardHeaderProps) {
             ) : (
               <span className="text-xs text-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)] px-2 py-0.5 rounded">{t('character.secondary')}</span>
             )}
+            
           </div>
           <div className="text-xs text-[var(--glass-text-tertiary)]">
             {props.selectedIndex !== null ? t('image.optionSelected', { number: props.selectedIndex + 1 }) : t('image.selectFirst')}

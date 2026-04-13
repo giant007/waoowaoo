@@ -108,6 +108,7 @@
   "typeAudio": "音频等",
   "apiKeyLabel": "API Key",
   "apiType": "API 类型",
+  "apiTypeArk": "火山引擎 Ark",
   "apiTypeGeminiCompatible": "Gemini 兼容",
   "apiTypeOpenAICompatible": "OpenAI 兼容",
   "apiTypeGeminiHint": "使用 Google SDK",

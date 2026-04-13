@@ -4,6 +4,8 @@ import type { CapabilitySelections, CapabilityValue } from '@/lib/model-config-c
 import { VideoPanelCard, type VideoPanel, type VideoModelOption, type MatchedVoiceLine, type FirstLastFrameParams, type VideoGenerationOptions } from '../video'
 import type { PromptField } from '@/lib/novel-promotion/stages/video-stage-runtime/useVideoPromptState'
 
+const EMPTY_MATCHED_VOICE_LINES: MatchedVoiceLine[] = []
+
 interface VideoRenderPanelProps {
   allPanels: VideoPanel[]
   linkedPanels: Map<string, boolean>
@@ -21,15 +23,6 @@ interface VideoRenderPanelProps {
   savingPrompts: Set<string>
   flModel: string
   flModelOptions: VideoModelOption[]
-  flGenerationOptions: VideoGenerationOptions
-  flCapabilityFields: Array<{
-    field: string
-    label: string
-    options: CapabilityValue[]
-    disabledOptions?: CapabilityValue[]
-    value: CapabilityValue | undefined
-  }>
-  flMissingCapabilityFields: string[]
   flCustomPrompts: Map<string, string>
   onGenerateVideo: (
     storyboardId: string,
@@ -59,6 +52,20 @@ interface VideoRenderPanelProps {
   onToggleLipSyncVideo: (key: string, value: boolean) => void
   getNextPanel: (currentIndex: number) => VideoPanel | null
   isLinkedAsLastFrame: (currentIndex: number) => boolean
+  getFlConfigurationForPair: (
+    firstPanel?: VideoPanel | null,
+    lastPanel?: VideoPanel | null,
+  ) => {
+    generationOptions: VideoGenerationOptions
+    capabilityFields: Array<{
+      field: string
+      label: string
+      options: CapabilityValue[]
+      disabledOptions?: CapabilityValue[]
+      value: CapabilityValue | undefined
+    }>
+    missingCapabilityFields: string[]
+  }
   getDefaultFlPrompt: (firstPrompt?: string, lastPrompt?: string) => string
   getLocalPrompt: (panelKey: string, externalPrompt?: string, field?: PromptField) => string
   updateLocalPrompt: (panelKey: string, value: string, field?: PromptField) => void
@@ -88,9 +95,6 @@ export default function VideoRenderPanel({
   savingPrompts,
   flModel,
   flModelOptions,
-  flGenerationOptions,
-  flCapabilityFields,
-  flMissingCapabilityFields,
   flCustomPrompts,
   onGenerateVideo,
   onUpdatePanelVideoModel,
@@ -105,6 +109,7 @@ export default function VideoRenderPanel({
   onToggleLipSyncVideo,
   getNextPanel,
   isLinkedAsLastFrame,
+  getFlConfigurationForPair,
   getDefaultFlPrompt,
   getLocalPrompt,
   updateLocalPrompt,
@@ -121,15 +126,30 @@ export default function VideoRenderPanel({
           const isLinked = linkedPanels.get(panelKey) || false
           const isLastFrame = isLinkedAsLastFrame(idx)
           const nextPanel = getNextPanel(idx)
+          const nextPanelKey = nextPanel ? `${nextPanel.storyboardId}-${nextPanel.panelIndex}` : null
+          const nextPanelLinkedToNext = nextPanelKey ? (linkedPanels.get(nextPanelKey) || false) : false
+          const flPairConfiguration = getFlConfigurationForPair(panel, nextPanel)
           const prevPanel = idx > 0 ? allPanels[idx - 1] : null
           const hasNext = idx < allPanels.length - 1
           const promptField: PromptField = isLinked ? 'firstLastFramePrompt' : 'videoPrompt'
+          const baseVideoPrompt = panel.textPanel?.video_prompt || ''
           const defaultFlPrompt = getDefaultFlPrompt(panel.textPanel?.video_prompt, nextPanel?.textPanel?.video_prompt)
+          const localVideoPrompt = getLocalPrompt(panelKey, baseVideoPrompt, 'videoPrompt')
+          const localFirstLastFramePrompt = getLocalPrompt(
+            panelKey,
+            panel.firstLastFramePrompt || '',
+            'firstLastFramePrompt',
+          )
           const externalPrompt = isLinked
-            ? (panel.firstLastFramePrompt || defaultFlPrompt)
-            : panel.textPanel?.video_prompt
-          const localPrompt = getLocalPrompt(panelKey, externalPrompt, promptField)
+            ? (panel.firstLastFramePrompt || baseVideoPrompt || defaultFlPrompt)
+            : baseVideoPrompt
+          const localPrompt = isLinked
+            ? (localFirstLastFramePrompt || localVideoPrompt || defaultFlPrompt)
+            : localVideoPrompt
           const isSavingPrompt = savingPrompts.has(`${promptField}:${panelKey}`)
+          const localSourceText = getLocalPrompt(panelKey, panel.textPanel?.text_segment, 'srtSegment')
+          const isSavingSourceText = savingPrompts.has(`srtSegment:${panelKey}`)
+          const matchedVoiceLines = panelVoiceLines.get(panelKey) ?? EMPTY_MATCHED_VOICE_LINES
 
           return (
             <div
@@ -138,16 +158,13 @@ export default function VideoRenderPanel({
                 if (element) panelRefs.current.set(panelKey, element)
                 else panelRefs.current.delete(panelKey)
               }}
-              className={`transition-all duration-500 ${highlightedPanelKey === panelKey
+              className={`transition-[transform,box-shadow,outline-color] duration-300 ${highlightedPanelKey === panelKey
                 ? 'ring-4 ring-[var(--glass-stroke-focus)] ring-offset-2 ring-offset-[var(--glass-bg-canvas)] rounded-2xl scale-[1.02]'
                 : ''
               }`}
             >
               <VideoPanelCard
-                panel={{
-                  ...panel,
-                  lipSyncTaskRunning: panel.lipSyncTaskRunning || false,
-                }}
+                panel={panel}
                 panelIndex={idx}
                 defaultVideoModel={defaultVideoModel}
                 capabilityOverrides={capabilityOverrides}
@@ -156,29 +173,36 @@ export default function VideoRenderPanel({
                 projectId={projectId}
                 episodeId={episodeId}
                 runningVoiceLineIds={runningVoiceLineIds}
-                matchedVoiceLines={panelVoiceLines.get(panelKey) || []}
+                matchedVoiceLines={matchedVoiceLines}
                 onLipSync={onLipSync}
                 showLipSyncVideo={panelVideoPreference.get(panelKey) ?? true}
                 onToggleLipSyncVideo={onToggleLipSyncVideo}
                 isLinked={isLinked}
                 isLastFrame={isLastFrame}
                 nextPanel={nextPanel}
+                nextPanelLinkedToNext={nextPanelLinkedToNext}
                 prevPanel={prevPanel}
                 hasNext={hasNext}
                 flModel={flModel}
                 flModelOptions={flModelOptions}
-                flGenerationOptions={flGenerationOptions}
-                flCapabilityFields={flCapabilityFields}
-                flMissingCapabilityFields={flMissingCapabilityFields}
+                flGenerationOptions={flPairConfiguration.generationOptions}
+                flCapabilityFields={flPairConfiguration.capabilityFields}
+                flMissingCapabilityFields={flPairConfiguration.missingCapabilityFields}
                 flCustomPrompt={flCustomPrompts.get(panelKey) || panel.firstLastFramePrompt || ''}
                 defaultFlPrompt={defaultFlPrompt}
                 localPrompt={localPrompt}
+                localSourceText={localSourceText}
                 isSavingPrompt={isSavingPrompt}
+                isSavingSourceText={isSavingSourceText}
                 onUpdateLocalPrompt={(value) => {
                   updateLocalPrompt(panelKey, value, promptField)
                   if (isLinked) onFlCustomPromptChange(panelKey, value)
                 }}
+                onUpdateLocalSourceText={(value) => {
+                  updateLocalPrompt(panelKey, value, 'srtSegment')
+                }}
                 onSavePrompt={(value) => savePrompt(panel.storyboardId, panel.panelIndex, panelKey, value, promptField)}
+                onSaveSourceText={(value) => savePrompt(panel.storyboardId, panel.panelIndex, panelKey, value, 'srtSegment')}
                 onGenerateVideo={onGenerateVideo}
                 onUpdatePanelVideoModel={onUpdatePanelVideoModel}
                 onToggleLink={onToggleLink}

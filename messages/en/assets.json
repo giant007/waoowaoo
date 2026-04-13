@@ -192,7 +192,12 @@
         "regenerateAllConfirm": "Regenerate images for all assets? This will overwrite existing images.",
         "noAssetsToGenerate": "No assets available for generation",
         "regenerateAllHint": "Regenerate all asset images (overwrite existing)",
-        "downloadAll": "Download all images as ZIP"
+        "downloadAll": "Download all images as ZIP",
+        "exportCharacterPrompts": "Export Character Prompts",
+        "exportingCharacterPrompts": "Exporting...",
+        "exportCharacterPromptsEmpty": "No character prompts to export",
+        "exportCharacterPromptsFailed": "Failed to export character prompts",
+        "exportCharacterPromptsAppearanceLabel": "Appearance {index}"
     },
     "common": {
         "actions": "Actions",

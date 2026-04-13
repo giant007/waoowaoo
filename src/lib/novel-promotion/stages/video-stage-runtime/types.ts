@@ -9,6 +9,7 @@ import type {
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
 import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config-contract'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
+import type { Character } from '@/types/project'
 
 export interface VoiceLine {
   id: string
@@ -39,6 +40,7 @@ export interface VideoStageShellProps {
   episodeId: string
   storyboards: Storyboard[]
   clips: Clip[]
+  characters?: Character[]
   defaultVideoModel: string
   capabilityOverrides: CapabilitySelections
   videoRatio?: string
@@ -57,7 +59,7 @@ export interface VideoStageShellProps {
     storyboardId: string,
     panelIndex: number,
     value: string,
-    field?: 'videoPrompt' | 'firstLastFramePrompt',
+    field?: 'videoPrompt' | 'firstLastFramePrompt' | 'srtSegment',
   ) => Promise<void>
   onUpdatePanelVideoModel: (storyboardId: string, panelIndex: number, model: string) => Promise<void>
   onOpenAssetLibraryForCharacter?: (characterId?: string | null) => void

@@ -35,6 +35,7 @@
     "regenerateLipSync": "Regenerate Lip Sync",
     "editPrompt": "Edit Prompt",
     "clickToEditPrompt": "Click to edit prompt...",
+    "clickToEditSourceText": "Click to edit corresponding text...",
     "shot": "Shot {number}",
     "unknownShotType": "Unknown",
     "correspondingText": "Corresponding Text",
@@ -77,6 +78,7 @@
     "showPending": "Pending",
     "showFailed": "Failed",
     "totalShots": "Total {count} shots",
+    "totalDuration": "Total duration {duration}",
     "generatingShots": "{count} generating",
     "completedShots": "{count} completed",
     "failedShots": "{count} failed",
@@ -89,9 +91,14 @@
     "downloadCount": "Download {count} videos",
     "packing": "Packing...",
     "downloadAll": "Download All",
+    "exportAllSourceTexts": "Export Source Texts",
+    "exportingSourceTexts": "Exporting...",
+    "exportSourceTextsEmpty": "There are no source texts to export",
     "enterEditor": "Enter Video Editor",
     "enterEdit": "Enter Editor",
-    "back": "Back"
+    "back": "Back",
+    "durationMultiplier": "Duration Multiplier",
+    "durationMultiplierHint": "All estimated durations are rounded after multiplying"
   },
   "stage": {
     "title": "Video Generation",

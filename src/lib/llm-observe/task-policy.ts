@@ -22,7 +22,7 @@ const LONG_FLOW_POLICY: LLMTaskPolicy = {
   displayMode: 'detail',
   fullscreen: true,
   priority: 1,
-  captureReasoning: true,
+  captureReasoning: false,
 }
 
 const LONG_FLOW_HIGH_POLICY: LLMTaskPolicy = {
@@ -35,7 +35,7 @@ const LLM_STANDARD_POLICY: LLMTaskPolicy = {
   displayMode: 'loading',
   fullscreen: false,
   priority: 0,
-  captureReasoning: true,
+  captureReasoning: false,
 }
 
 const POLICY_BY_TASK_TYPE: Partial<Record<TaskType, LLMTaskPolicy>> = {

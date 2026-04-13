@@ -4,6 +4,7 @@ import { getArtStylePrompt } from '@/lib/constants'
 import { createScopedLogger } from '@/lib/logging/core'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import {
   assertTaskActive,
   getProjectModels,
@@ -154,7 +155,7 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const panelId = pickFirstString(payload.panelId, job.data.targetId)
   if (!panelId) throw new Error('panelId missing')
-
+  _ulogInfo("handlePanelImageTask payload:"+payload)
   const panel = await prisma.novelPromotionPanel.findUnique({
     where: { id: panelId },
   })
@@ -220,12 +221,9 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     sourceText: panel.srtSegment || panel.description || '',
     contextJson,
   })
-  logger.info({
-    message: 'panel image prompt resolved',
-    details: {
-      promptLength: prompt.length,
-    },
-  })
+
+  _ulogInfo('[panel-image] resolved panel image prompt', prompt)
+
 
   const candidates: string[] = []
 

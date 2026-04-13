@@ -80,7 +80,8 @@ export function parseExternalId(externalId: string): {
     if (externalId.startsWith('ARK:')) {
         const parts = externalId.split(':')
         const type = parts[1]
-        const requestId = parts.slice(2).join(':')
+        const providerToken = parts.length >= 4 ? parts[2] : undefined
+        const requestId = parts.length >= 4 ? parts.slice(3).join(':') : parts.slice(2).join(':')
         if ((type !== 'VIDEO' && type !== 'IMAGE') || !requestId) {
             throw new Error(`无效 ARK externalId: "${externalId}"，应为 ARK:TYPE:requestId`)
         }
@@ -88,6 +89,7 @@ export function parseExternalId(externalId: string): {
             provider: 'ARK',
             type: type as 'VIDEO' | 'IMAGE',
             requestId,
+            ...(providerToken ? { providerToken } : {}),
         }
     }
 
@@ -234,7 +236,7 @@ export async function pollAsyncTask(
         case 'FAL':
             return await pollFalTask(parsed.endpoint!, parsed.requestId, userId)
         case 'ARK':
-            return await pollArkTask(parsed.requestId, userId)
+            return await pollArkTask(parsed.requestId, userId, parsed.providerToken)
         case 'GEMINI':
             return await pollGeminiTask(parsed.requestId, userId)
         case 'GOOGLE':
@@ -504,9 +506,13 @@ async function pollFalTask(
  */
 async function pollArkTask(
     taskId: string,
-    userId: string
+    userId: string,
+    providerToken?: string
 ): Promise<PollResult> {
-    const { apiKey } = await getProviderConfig(userId, 'ark')
+    const providerId = providerToken
+        ? Buffer.from(providerToken, 'base64url').toString('utf8').trim()
+        : 'ark'
+    const { apiKey } = await getProviderConfig(userId, providerId || 'ark')
     const result = await querySeedanceVideoStatus(taskId, apiKey)
 
     return {

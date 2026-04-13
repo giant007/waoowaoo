@@ -137,7 +137,7 @@ export function splitStructuredOutput(raw: string): {
     const parsedFinal = splitThinkTaggedContent(finalRaw)
     return {
       hasStructured: true,
-      showReasoning: true,
+      showReasoning: false,
       showFinal: true,
       reasoning: mergeReasoning(reasoningRaw, parsedFinal.reasoning),
       finalText: parsedFinal.text,
@@ -147,7 +147,7 @@ export function splitStructuredOutput(raw: string): {
   if (normalized.startsWith(REASONING_HEADER)) {
     return {
       hasStructured: true,
-      showReasoning: true,
+      showReasoning: false,
       showFinal: true,
       reasoning: normalized.slice(REASONING_HEADER.length).trim(),
       finalText: '',
@@ -158,7 +158,7 @@ export function splitStructuredOutput(raw: string): {
   const parsedFinal = splitThinkTaggedContent(finalRaw)
   return {
     hasStructured: true,
-    showReasoning: true,
+    showReasoning: false,
     showFinal: true,
     reasoning: parsedFinal.reasoning,
     finalText: parsedFinal.text,

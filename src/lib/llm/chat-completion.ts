@@ -86,7 +86,7 @@ export async function chatCompletion(
 
   const {
     temperature = 0.7,
-    reasoning = true,
+    reasoning = false,
     reasoningEffort = 'high',
     maxRetries = 2,
   } = options
@@ -382,7 +382,7 @@ export async function chatCompletion(
           ? {
             openai: {
               reasoningEffort: mapReasoningEffort(reasoningEffort),
-              forceReasoning: true,
+              forceReasoning: false,
             },
           }
           : undefined

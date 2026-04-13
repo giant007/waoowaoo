@@ -7,6 +7,28 @@ import {
 import { withPrismaRetry } from '@/lib/prisma-retry'
 import { queryTaskTargetStates, type TaskTargetQuery } from '@/lib/task/state-service'
 
+function nowMs() {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now()
+  }
+  return Date.now()
+}
+
+function buildServerTiming(params: {
+  jsonMs: number
+  authMs: number
+  queryMs: number
+  totalMs: number
+}) {
+  const format = (value: number) => value.toFixed(2)
+  return [
+    `json;dur=${format(params.jsonMs)}`,
+    `auth;dur=${format(params.authMs)}`,
+    `query;dur=${format(params.queryMs)}`,
+    `total;dur=${format(params.totalMs)}`,
+  ].join(', ')
+}
+
 function normalizeTarget(input: unknown): TaskTargetQuery {
   const payload = input as Record<string, unknown>
   const targetType = typeof payload.targetType === 'string' ? payload.targetType.trim() : ''
@@ -26,12 +48,15 @@ function normalizeTarget(input: unknown): TaskTargetQuery {
 }
 
 export const POST = apiHandler(async (request: NextRequest) => {
+  const requestStartedAt = nowMs()
+  const jsonStartedAt = nowMs()
   let body: Record<string, unknown>
   try {
     body = await request.json()
   } catch {
     throw new ApiError('INVALID_PARAMS')
   }
+  const jsonMs = nowMs() - jsonStartedAt
   const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : ''
   const targetsRaw = Array.isArray(body?.targets) ? body.targets : null
 
@@ -46,9 +71,21 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const targets = targetsRaw.map(normalizeTarget)
 
   if (targets.length === 0) {
-    return NextResponse.json({ states: [] })
+    const totalMs = nowMs() - requestStartedAt
+    const response = NextResponse.json({ states: [] })
+    response.headers.set(
+      'Server-Timing',
+      buildServerTiming({
+        jsonMs,
+        authMs: 0,
+        queryMs: 0,
+        totalMs,
+      }),
+    )
+    return response
   }
 
+  const authStartedAt = nowMs()
   let userId: string
   if (projectId === 'global-asset-hub') {
     const authResult = await requireUserAuth()
@@ -59,13 +96,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
     if (isErrorResponse(authResult)) return authResult
     userId = authResult.session.user.id
   }
+  const authMs = nowMs() - authStartedAt
 
+  const queryStartedAt = nowMs()
   const states = await withPrismaRetry(() =>
     queryTaskTargetStates({
       projectId,
       userId,
       targets})
   )
+  const queryMs = nowMs() - queryStartedAt
+  const totalMs = nowMs() - requestStartedAt
 
-  return NextResponse.json({ states })
+  const response = NextResponse.json({ states })
+  response.headers.set(
+    'Server-Timing',
+    buildServerTiming({
+      jsonMs,
+      authMs,
+      queryMs,
+      totalMs,
+    }),
+  )
+  return response
 })

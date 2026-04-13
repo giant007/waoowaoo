@@ -192,7 +192,12 @@
         "regenerateAllConfirm": "确定要重新生成所有资产的图片吗？这将覆盖现有图片。",
         "noAssetsToGenerate": "没有可生成的资产",
         "regenerateAllHint": "重新生成所有资产图片（覆盖现有）",
-        "downloadAll": "打包下载全部图片"
+        "downloadAll": "打包下载全部图片",
+        "exportCharacterPrompts": "导出角色提示词",
+        "exportingCharacterPrompts": "导出中...",
+        "exportCharacterPromptsEmpty": "当前没有可导出的角色提示词",
+        "exportCharacterPromptsFailed": "导出角色提示词失败",
+        "exportCharacterPromptsAppearanceLabel": "形象 {index}"
     },
     "common": {
         "actions": "操作",
@@ -272,11 +277,11 @@
             "D": "D级 - 群众演员"
         },
         "costumeLevel": {
-            "5": "皇室/顶奢级",
-            "4": "贵族/精英级",
-            "3": "专业/品质级",
+            "1": "朴素/统一级",
             "2": "日常/普通级",
-            "1": "朴素/统一级"
+            "3": "专业/品质级",
+            "4": "贵族/精英级",
+            "5": "皇室/顶奢级"
         },
         "importanceLevel": "角色重要性层级",
         "characterArchetype": "角色原型",

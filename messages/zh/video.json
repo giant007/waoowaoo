@@ -51,7 +51,8 @@
     "batchMode": "批量模式",
     "batchModeDesc": "离线推理，价格便宜50%，24小时内完成",
     "batchModeEnabled": "已开启批量模式",
-    "batchModeDisabled": "批量模式已关闭"
+    "batchModeDisabled": "批量模式已关闭",
+    "clickToEditSourceText": "点击编辑对应原文..."
   },
   "promptModal": {
     "title": "编辑镜头 #{number} 视频提示词",
@@ -77,6 +78,7 @@
     "showPending": "待生成",
     "showFailed": "失败",
     "totalShots": "共 {count} 个镜头",
+    "totalDuration": "总时长 {duration}",
     "generatingShots": "{count} 个生成中",
     "completedShots": "{count} 个已生成",
     "failedShots": "{count} 个失败",
@@ -89,9 +91,14 @@
     "downloadCount": "下载 {count} 个视频",
     "packing": "打包中...",
     "downloadAll": "下载全部",
+    "exportAllSourceTexts": "导出分镜原文",
+    "exportingSourceTexts": "导出中...",
+    "exportSourceTextsEmpty": "当前没有可导出的分镜原文",
     "enterEditor": "进入视频剪辑器",
     "enterEdit": "进入剪辑",
-    "back": "返回"
+    "back": "返回",
+    "durationMultiplier": "时长阈值",
+    "durationMultiplierHint": "按倍率调整后再四舍五入"
   },
   "stage": {
     "title": "视频生成",

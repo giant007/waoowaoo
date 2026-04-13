@@ -5,11 +5,13 @@ import { useWorkspaceStageRuntime } from '../WorkspaceStageRuntimeContext'
 import { useWorkspaceEpisodeStageData } from '../hooks/useWorkspaceEpisodeStageData'
 import type { Clip as VideoClip } from './video'
 import { useWorkspaceProvider } from '../WorkspaceProvider'
+import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 
 export default function VideoStageRoute() {
   const runtime = useWorkspaceStageRuntime()
   const { projectId, episodeId } = useWorkspaceProvider()
   const { clips, storyboards } = useWorkspaceEpisodeStageData()
+  const { data: assets } = useProjectAssets(projectId)
   const normalizedClips: VideoClip[] = clips.map((clip) => ({
     id: clip.id,
     start: clip.start ?? 0,
@@ -25,6 +27,7 @@ export default function VideoStageRoute() {
       episodeId={episodeId}
       storyboards={storyboards}
       clips={normalizedClips}
+      characters={assets?.characters ?? []}
       defaultVideoModel={runtime.videoModel || ''}
       capabilityOverrides={runtime.capabilityOverrides}
       videoRatio={runtime.videoRatio ?? undefined}

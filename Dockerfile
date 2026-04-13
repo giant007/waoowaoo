@@ -14,6 +14,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Prisma generate + Next.js build
+ENV REDIS_DISABLED=true
 RUN npm run build
 
 # ==================== Stage 3: Production ====================

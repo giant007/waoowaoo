@@ -40,7 +40,10 @@ export async function GET(
     })
   }
 
-  const fetchUrl = toFetchableUrl(getSignedUrl(media.storageKey))
+  const signedUrl = getSignedUrl(media.storageKey)
+  const fetchUrl = signedUrl.startsWith('/')
+    ? new URL(signedUrl, request.nextUrl.origin).toString()
+    : toFetchableUrl(signedUrl)
   const range = request.headers.get('range')
 
   const upstream = await fetch(fetchUrl, {

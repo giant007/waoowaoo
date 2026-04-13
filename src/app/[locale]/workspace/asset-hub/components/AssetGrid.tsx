@@ -70,6 +70,8 @@ interface AssetGridProps {
     onAddLocation: () => void
     onAddVoice: () => void
     onDownloadAll?: () => void
+    onExportCharacterPrompts?: () => void
+    isExportingCharacterPrompts?: boolean
     isDownloading?: boolean
     selectedFolderId: string | null
     onImageClick?: (url: string) => void
@@ -94,6 +96,8 @@ export function AssetGrid({
     onAddLocation,
     onAddVoice,
     onDownloadAll,
+    onExportCharacterPrompts,
+    isExportingCharacterPrompts,
     isDownloading,
     selectedFolderId: _selectedFolderId,
     onImageClick,
@@ -209,6 +213,24 @@ export function AssetGrid({
                         >
                             <AppIcon name={isDownloading ? 'refresh' : 'download'} className={`w-4 h-4 ${isDownloading ? 'animate-spin' : ''}`} />
                             <span>{isDownloading ? t('downloading') : t('downloadAll')}</span>
+                        </button>
+                    )}
+                    {onExportCharacterPrompts && (filter === 'all' || filter === 'character') && (
+                        <button
+                            onClick={onExportCharacterPrompts}
+                            disabled={isExportingCharacterPrompts || characters.length === 0}
+                            title={t('exportCharacterPromptsTitle')}
+                            className="glass-btn-base glass-btn-secondary px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <AppIcon
+                                name={isExportingCharacterPrompts ? 'refresh' : 'download'}
+                                className={`w-4 h-4 ${isExportingCharacterPrompts ? 'animate-spin' : ''}`}
+                            />
+                            <span>
+                                {isExportingCharacterPrompts
+                                    ? t('exportingCharacterPrompts')
+                                    : t('exportCharacterPrompts')}
+                            </span>
                         </button>
                     )}
                     <button

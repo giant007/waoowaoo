@@ -1,6 +1,6 @@
 'use client'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './ImageSection.css'
 import { GlassButton } from '@/components/ui/primitives'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
@@ -9,6 +9,11 @@ import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import ImageSectionCandidateMode from './ImageSectionCandidateMode'
 import ImageSectionActionButtons from './ImageSectionActionButtons'
 import { AppIcon } from '@/components/ui/icons'
+
+
+//新增错误输出 by lyq
+import { shouldShowError } from '@/lib/error-utils'
+import { useUploadProjectPanelImage } from '@/lib/query/mutations'
 
 interface PanelCandidateData {
   candidates: string[]
@@ -19,6 +24,7 @@ interface ImageSectionProps {
   panelId: string
   imageUrl: string | null
   globalPanelNumber: number
+  projectId: string
   shotType: string
   videoRatio: string
   isDeleting: boolean
@@ -42,6 +48,7 @@ export default function ImageSection({
   panelId,
   imageUrl,
   globalPanelNumber,
+  projectId,
   shotType,
   videoRatio,
   isDeleting,
@@ -64,6 +71,75 @@ export default function ImageSection({
   const [isTaskPulseAnimating, setIsTaskPulseAnimating] = useState(false)
   const cssAspectRatio = videoRatio.replace(':', '/')
   const hasValidCandidates = !!candidateData && candidateData.candidates.some((url) => !url.startsWith('PENDING:'))
+  const viewRef = useRef<HTMLDivElement>(null)
+  const [isInView, setIsInView] = useState(true)
+
+  useEffect(() => {
+    const element = viewRef.current
+    if (!element || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry) {
+          setIsInView(entry.isIntersecting || entry.intersectionRatio > 0)
+        }
+      },
+      { root: null, rootMargin: '300px', threshold: 0.01 }
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  // Image upload (ported from CharacterCard)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pendingUploadIndex, setPendingUploadIndex] = useState<number | undefined>(undefined)
+  const uploadImage = useUploadProjectPanelImage(projectId)
+
+  const triggerUpload = (imageIndex?: number) => {
+    setPendingUploadIndex(imageIndex)
+    fileInputRef.current?.click()
+  }
+
+  const handleUpload = () => {
+    const file = fileInputRef.current?.files?.[0]
+    if (!file) return
+
+    const uploadIndex = pendingUploadIndex
+
+    uploadImage.mutate(
+      {
+        file,
+        panelId: panelId,
+        imageIndex: uploadIndex,
+        labelText: 'panel', // Storyboard panel images don't use a custom label yet.
+      },
+      {
+        onSuccess: () => {
+          alert(t('image.uploadSuccess'))
+        },
+        onError: (error) => {
+          if (shouldShowError(error)) {
+            alert(t('image.uploadFailed') + ': ' + error.message)
+          }
+        },
+        onSettled: () => {
+          setPendingUploadIndex(undefined)
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+          }
+        }
+      }
+    )
+  }
+
+  const uploadPendingState = uploadImage.isPending
+    ? resolveTaskPresentationState({
+      phase: 'processing',
+      intent: 'process',
+      resource: 'image',
+      hasOutput: !!imageUrl,
+    })
+    : null
 
   const triggerPulse = () => {
     setIsTaskPulseAnimating(true)
@@ -134,9 +210,17 @@ export default function ImageSection({
 
   return (
     <div
+      ref={viewRef}
       className={`relative overflow-hidden group rounded-t-2xl transition-all bg-[var(--glass-bg-muted)] ${isTaskPulseAnimating ? 'animate-brightness-boost' : ''}`}
       style={{ aspectRatio: cssAspectRatio }}
     >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={() => handleUpload()}
+        className="hidden"
+      />
       {isDeleting ? (
         renderLoadingState('process', imageUrl)
       ) : isModifying ? (
@@ -144,7 +228,9 @@ export default function ImageSection({
       ) : isSubmittingPanelImageTask ? (
         renderLoadingState('regenerate', imageUrl)
       ) : candidateData ? (
-        hasValidCandidates ? (
+        !isInView ? (
+          <div className="h-full w-full bg-[var(--glass-bg-muted)]" />
+        ) : hasValidCandidates ? (
           <ImageSectionCandidateMode
             panelId={panelId}
             imageUrl={imageUrl}
@@ -160,20 +246,25 @@ export default function ImageSection({
       ) : failedError ? (
         renderFailedState()
       ) : imageUrl ? (
-        <MediaImageWithLoading
-          src={imageUrl}
-          alt={t('variant.shotNum', { number: globalPanelNumber })}
-          containerClassName="h-full w-full"
-          className={`w-full h-full object-cover ${onPreviewImage ? 'cursor-zoom-in' : ''}`}
-          onClick={onPreviewImage ? () => onPreviewImage(imageUrl) : undefined}
-          title={onPreviewImage ? t('image.clickToPreview') : undefined}
-          sizes="(max-width: 768px) 100vw, 33vw"
-        />
+        !isInView ? (
+          <div className="h-full w-full bg-[var(--glass-bg-muted)]" />
+        ) : (
+          <MediaImageWithLoading
+            src={imageUrl}
+            alt={t('variant.shotNum', { number: globalPanelNumber })}
+            containerClassName="h-full w-full"
+            className={`w-full h-full object-cover ${onPreviewImage ? 'cursor-zoom-in' : ''}`}
+            onClick={onPreviewImage ? () => onPreviewImage(imageUrl) : undefined}
+            title={onPreviewImage ? t('image.clickToPreview') : undefined}
+            sizes="(max-width: 768px) 100vw, 33vw"
+          />
+        )
       ) : (
         renderEmptyState()
       )}
 
       <div className="absolute top-2 left-2">
+        
         <span className="glass-chip glass-chip-neutral px-2 py-0.5 text-xs font-medium">{globalPanelNumber}</span>
       </div>
 
@@ -188,6 +279,10 @@ export default function ImageSection({
           previousImageUrl={previousImageUrl}
           isSubmittingPanelImageTask={isSubmittingPanelImageTask}
           isModifying={isModifying}
+          isDeleting={isDeleting}
+          onUpload={() => triggerUpload()}
+          isUploading={uploadImage.isPending}
+          uploadPendingState={uploadPendingState}
           onRegeneratePanelImage={onRegeneratePanelImage}
           onOpenEditModal={onOpenEditModal}
           onOpenAIDataModal={onOpenAIDataModal}

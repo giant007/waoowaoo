@@ -18,12 +18,18 @@ import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
+import { submitTask } from '@/lib/task/submitter'
+import { hasPanelLipSyncOutput } from '@/lib/task/has-output'
+import { withTaskUiPayload } from '@/lib/task/ui-payload'
+import { composeModelKey } from '@/lib/model-config-contract'
+import type { Locale } from '@/i18n/routing'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
 type VideoOptionMap = Record<string, VideoOptionValue>
 type VideoGenerationMode = 'normal' | 'firstlastframe'
 type PanelRecord = NonNullable<Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>>>
+const DEFAULT_LIPSYNC_MODEL_KEY = composeModelKey('fal', 'fal-ai/kling-video/lipsync/audio-to-video')
 
 function toDurationMs(value: number | null | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
@@ -53,6 +59,90 @@ async function fetchPanelByStoryboardIndex(storyboardId: string, panelIndex: num
       panelIndex,
     },
   })
+}
+
+function buildFirstLastFramePrompt(
+  firstPrompt: string | null | undefined,
+  lastPrompt: string | null | undefined,
+  fallback: string | null | undefined,
+): string | null {
+  const first = typeof firstPrompt === 'string' ? firstPrompt.trim() : ''
+  const last = typeof lastPrompt === 'string' ? lastPrompt.trim() : ''
+  const fallbackText = typeof fallback === 'string' ? fallback.trim() : ''
+
+  if (first && last) {
+    return `${first}\nThen transition to: ${last}`
+  }
+  if (first) return first
+  if (last) return last
+  return fallbackText || null
+}
+
+async function fetchMatchedVoiceLineWithAudio(storyboardId: string, panelIndex: number) {
+  return await prisma.novelPromotionVoiceLine.findFirst({
+    where: {
+      matchedStoryboardId: storyboardId,
+      matchedPanelIndex: panelIndex,
+      audioUrl: {
+        not: null,
+      },
+    },
+    orderBy: [
+      { lineIndex: 'asc' },
+      { createdAt: 'asc' },
+    ],
+  })
+}
+
+async function resolveLipSyncModel(userId: string): Promise<string> {
+  const preference = await prisma.userPreference.findUnique({
+    where: { userId },
+    select: { lipSyncModel: true },
+  })
+  const preferredLipSyncModel =
+    typeof preference?.lipSyncModel === 'string' ? preference.lipSyncModel.trim() : ''
+  return parseModelKeyStrict(preferredLipSyncModel) ? preferredLipSyncModel : DEFAULT_LIPSYNC_MODEL_KEY
+}
+
+async function enqueueAutoLipSyncForGeneratedVideo(params: {
+  job: Job<TaskJobData>
+  panel: PanelRecord
+  lastPanel: PanelRecord | null
+}) {
+  const { job, panel, lastPanel } = params
+  if (!lastPanel) return null
+
+  const voiceLine = await fetchMatchedVoiceLineWithAudio(lastPanel.storyboardId, lastPanel.panelIndex)
+  if (!voiceLine?.audioUrl) return null
+
+  const lipSyncModel = await resolveLipSyncModel(job.data.userId)
+
+  try {
+    return await submitTask({
+      userId: job.data.userId,
+      locale: job.data.locale as Locale,
+      requestId: job.data.trace?.requestId || null,
+      projectId: job.data.projectId,
+      episodeId: job.data.episodeId || null,
+      type: TASK_TYPE.LIP_SYNC,
+      targetType: 'NovelPromotionPanel',
+      targetId: panel.id,
+      payload: withTaskUiPayload({
+        storyboardId: panel.storyboardId,
+        panelIndex: panel.panelIndex,
+        voiceLineId: voiceLine.id,
+        lipSyncModel,
+        autoTriggeredByFirstLastFrame: true,
+        autoLipSyncSourceStoryboardId: lastPanel.storyboardId,
+        autoLipSyncSourcePanelIndex: lastPanel.panelIndex,
+      }, {
+        hasOutputAtStart: await hasPanelLipSyncOutput(panel.id),
+      }),
+      dedupeKey: `lip_sync:${panel.id}:${voiceLine.id}`,
+    })
+  } catch {
+    return null
+  }
 }
 
 async function getPanelForVideoTask(job: Job<TaskJobData>) {
@@ -96,7 +186,25 @@ async function generateVideoForPanel(
   const firstLastCustomPrompt = typeof firstLastFramePayload?.customPrompt === 'string' ? firstLastFramePayload.customPrompt : null
   const persistedFirstLastPrompt = firstLastFramePayload ? panel.firstLastFramePrompt : null
   const customPrompt = typeof payload.customPrompt === 'string' ? payload.customPrompt : null
-  const prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
+  let lastPanel: PanelRecord | null = null
+
+  if (
+    firstLastFramePayload &&
+    typeof firstLastFramePayload.lastFrameStoryboardId === 'string' &&
+    firstLastFramePayload.lastFrameStoryboardId &&
+    firstLastFramePayload.lastFramePanelIndex !== undefined
+  ) {
+    lastPanel = await fetchPanelByStoryboardIndex(
+      firstLastFramePayload.lastFrameStoryboardId,
+      Number(firstLastFramePayload.lastFramePanelIndex),
+    )
+  }
+
+  const prompt = firstLastCustomPrompt
+    || persistedFirstLastPrompt
+    || (firstLastFramePayload
+      ? buildFirstLastFramePrompt(panel.videoPrompt, lastPanel?.videoPrompt, customPrompt || panel.description)
+      : (customPrompt || panel.videoPrompt || panel.description))
   if (!prompt) {
     throw new Error(`Panel ${panel.id} has no video prompt`)
   }
@@ -123,20 +231,10 @@ async function generateVideoForPanel(
     if (firstLastFrameCapabilities?.video?.firstlastframe !== true) {
       throw new Error(`VIDEO_FIRSTLASTFRAME_MODEL_UNSUPPORTED: ${model}`)
     }
-    if (
-      typeof firstLastFramePayload.lastFrameStoryboardId === 'string' &&
-      firstLastFramePayload.lastFrameStoryboardId &&
-      firstLastFramePayload.lastFramePanelIndex !== undefined
-    ) {
-      const lastPanel = await fetchPanelByStoryboardIndex(
-        firstLastFramePayload.lastFrameStoryboardId,
-        Number(firstLastFramePayload.lastFramePanelIndex),
-      )
-      if (lastPanel?.imageUrl) {
-        const lastFrameUrl = toSignedUrlIfCos(lastPanel.imageUrl, 3600)
-        if (lastFrameUrl) {
-          lastFrameImageBase64 = await normalizeToBase64ForGeneration(lastFrameUrl)
-        }
+    if (lastPanel?.imageUrl) {
+      const lastFrameUrl = toSignedUrlIfCos(lastPanel.imageUrl, 3600)
+      if (lastFrameUrl) {
+        lastFrameImageBase64 = await normalizeToBase64ForGeneration(lastFrameUrl)
       }
     }
   }
@@ -208,9 +306,34 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
     },
   })
 
+  let autoLipSyncTaskId: string | null = null
+  const firstLastFramePayload =
+    typeof payload.firstLastFrame === 'object' && payload.firstLastFrame !== null
+      ? (payload.firstLastFrame as AnyObj)
+      : null
+  if (
+    generationMode === 'firstlastframe' &&
+    firstLastFramePayload &&
+    typeof firstLastFramePayload.lastFrameStoryboardId === 'string' &&
+    firstLastFramePayload.lastFrameStoryboardId &&
+    firstLastFramePayload.lastFramePanelIndex !== undefined
+  ) {
+    const lastPanel = await fetchPanelByStoryboardIndex(
+      firstLastFramePayload.lastFrameStoryboardId,
+      Number(firstLastFramePayload.lastFramePanelIndex),
+    )
+    const autoLipSyncResult = await enqueueAutoLipSyncForGeneratedVideo({
+      job,
+      panel,
+      lastPanel,
+    })
+    autoLipSyncTaskId = autoLipSyncResult?.taskId || null
+  }
+
   return {
     panelId: panel.id,
     videoUrl: cosKey,
+    autoLipSyncTaskId,
   }
 }
 

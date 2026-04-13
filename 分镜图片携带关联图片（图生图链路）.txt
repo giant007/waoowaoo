@@ -1,0 +1,67 @@
+resolveImageSourceFromGeneration 一路下去的“到底在哪个接口吃到了参考图”的明确位置。
+
+主链路
+
+resolveImageSourceFromGeneration 把 options.referenceImages 原样传给 generateImage。
+src/lib/workers/utils.ts
+generateImage 通过 resolveModelSelection 决定 provider，并根据 gatewayRoute 分流。
+src/lib/generator-api.ts
+最终落到的 provider / HTTP API（带参考图的真实接收点）
+
+OpenAI 兼容路由（openai-compat）
+入口：generateImageViaOpenAICompat 或 generateImageViaOpenAICompatTemplate
+src/lib/model-gateway/openai-compat/image.ts
+src/lib/model-gateway/openai-compat/template-image.ts
+关键点：
+generateImageViaOpenAICompat 在有参考图时调用 client.images.edit(...)，参数 image: toUploadFile(...) 就是参考图。
+HTTP 目标：createOpenAICompatClient 使用 providerConfig.baseUrl 作为 baseURL，请求发往该 baseUrl 的 OpenAI-compatible /images/edits 端点。
+src/lib/model-gateway/openai-compat/common.ts
+src/lib/model-gateway/openai-compat/image.ts
+模板模式：generateImageViaOpenAICompatTemplate 直接 fetch(createRequest.endpointUrl, ...)，模板变量里 image/images 就是参考图。
+src/lib/model-gateway/openai-compat/template-image.ts
+
+FAL
+入口：FalImageGenerator
+src/lib/generators/fal.ts
+关键点：参考图被转成 data URL，写入 body.image_urls。
+HTTP 目标：POST https://queue.fal.run/{endpoint}。
+
+ARK（火山引擎）
+入口：ArkImageGenerator
+src/lib/generators/ark.ts
+关键点：参考图转 base64，写入 requestBody.image。
+HTTP 目标：arkImageGeneration -> POST ${ARK_BASE_URL}/images/generations。
+src/lib/ark-api.ts
+
+Google Gemini（官方 google）
+入口：GoogleGeminiImageGenerator
+src/lib/generators/image/google.ts
+关键点：参考图变成 inlineData，拼进 contents[].parts[]，随后 ai.models.generateContent(...)。
+HTTP 目标：GoogleGenAI SDK 内部调用 Google API。
+
+Google Gemini Batch
+入口：GoogleGeminiBatchImageGenerator
+src/lib/generators/image/google.ts
+关键点：参考图进入 submitGeminiBatch(...) 的 inlineData，随后 ai.batches.create(...)。
+src/lib/gemini-batch-utils.ts
+
+Gemini-Compatible（自定义 baseUrl 的 Gemini 兼容）
+入口：GeminiCompatibleImageGenerator
+src/lib/generators/image/gemini-compatible.ts
+关键点：参考图转成 inlineData，拼进 contents[].parts[]，然后 ai.models.generateContent(...)。
+HTTP 目标：GoogleGenAI SDK，但 httpOptions.baseUrl 来自 providerConfig.baseUrl。
+
+OpenAI-Compatible 生成器（非网关模板）
+入口：OpenAICompatibleImageGenerator
+src/lib/generators/image/openai-compatible.ts
+关键点：内部直接调用 generateImageViaOpenAICompat，最终还是 client.images.edit(...)。
+
+Bailian / SiliconFlow
+generateBailianImage / generateSiliconFlowImage 目前是 OFFICIAL_PROVIDER_NOT_IMPLEMENTED，即便带了 referenceImages 也不会真正发出去。
+src/lib/providers/bailian/image.ts
+src/lib/providers/siliconflow/image.ts
+
+你这条“分镜图生成”的实际 provider 怎么确定？
+在 panel-image-task-handler.ts 里调用 resolveImageSourceFromGeneration 的 modelId 是 modelKey（来自模型选择配置）。你可以从运行日志里看 resolveModelSelection 输出的 provider，或直接查配置表里该 modelKey 对应的 provider。
+src/lib/workers/handlers/panel-image-task-handler.ts
+src/lib/generator-api.ts

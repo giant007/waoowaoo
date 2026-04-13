@@ -62,7 +62,7 @@ services:
 
   # ==================== App (Next.js + Workers) ====================
   app:
-    image: ghcr.io/saturndec/waoowaoo:latest
+    build: .
     container_name: waoowaoo-app
     restart: unless-stopped
     environment:
@@ -74,21 +74,15 @@ services:
       REDIS_USERNAME: ""
       REDIS_PASSWORD: ""
       REDIS_TLS: ""
-      # 存储：默认 MinIO（S3 兼容）
-      STORAGE_TYPE: minio
-      MINIO_ENDPOINT: "http://minio:9000"
-      MINIO_REGION: "us-east-1"
-      MINIO_BUCKET: "waoowaoo"
-      MINIO_ACCESS_KEY: "minioadmin"
-      MINIO_SECRET_KEY: "minioadmin"
-      MINIO_FORCE_PATH_STYLE: "true"
+      # 存储：本地文件（开发调试）
+      STORAGE_TYPE: local
       # 认证
       NEXTAUTH_URL: "http://localhost:3000"
-      NEXTAUTH_SECRET: "waoowaoo-default-secret-2026"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-waoowaoo-default-secret-2026}"
       # 内部密钥
       CRON_SECRET: "waoowaoo-docker-cron-secret"
       INTERNAL_TASK_TOKEN: "waoowaoo-docker-task-token"
-      API_ENCRYPTION_KEY: "waoowaoo-opensource-fixed-key-2026"
+      API_ENCRYPTION_KEY: "${API_ENCRYPTION_KEY:-waoowaoo-opensource-fixed-key-2026}"
       # Worker 配置
       WATCHDOG_INTERVAL_MS: "30000"
       TASK_HEARTBEAT_TIMEOUT_MS: "90000"
@@ -119,14 +113,15 @@ services:
       - "13010:3010"
     volumes:
       - ./data:/app/data
+      - ./data/uploads:/app/data/uploads
       - ./docker-logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      # minio:
+      #   condition: service_healthy
     command: >
       sh -c "
         npx prisma db push --skip-generate &&

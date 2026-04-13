@@ -85,7 +85,7 @@ export async function chatCompletionStream(
     ? 'official'
     : (providerConfig.gatewayRoute || resolveModelGatewayRoute(provider))
   const temperature = options.temperature ?? 0.7
-  const reasoning = options.reasoning ?? true
+  const reasoning = options.reasoning ?? false
   const reasoningEffort = options.reasoningEffort || 'high'
   const projectId =
     typeof options.projectId === 'string' && options.projectId.trim().length > 0
@@ -374,7 +374,7 @@ export async function chatCompletionStream(
 
     if (providerKey === 'ark') {
       const { arkResponsesStream, convertChatMessagesToArkInput, buildArkThinkingParam } = await import('@/lib/ark-llm')
-      const useReasoning = options.reasoning ?? true
+      const useReasoning = options.reasoning ?? false
       const arkThinkingParams = buildArkThinkingParam(resolvedModelId, useReasoning)
 
       const { stream: arkStream, result: getResult } = arkResponsesStream({
@@ -458,11 +458,11 @@ export async function chatCompletionStream(
           ? {
             openai: {
               reasoningEffort: mapReasoningEffort(options.reasoningEffort || 'high'),
-              forceReasoning: true,
+              forceReasoning: false,
             },
           }
           : undefined
-        const useReasoning = options.reasoning ?? true
+        const useReasoning = options.reasoning ?? false
         const aiStreamResult = streamText({
           model: aiOpenAI.chat(resolvedModelId),
           system: getSystemPrompt(messages),
@@ -748,12 +748,12 @@ export async function chatCompletionStream(
       })
 
       const extraParams: Record<string, unknown> = {}
-      if (isOpenRouter && (options.reasoning ?? true)) {
+      if (isOpenRouter && (options.reasoning ?? false)) {
         extraParams.reasoning = { effort: options.reasoningEffort || 'high' }
       }
 
       emitStreamStage(callbacks, streamStep, 'streaming', providerName)
-      const isOpenRouterReasoning = isOpenRouter && (options.reasoning ?? true)
+      const isOpenRouterReasoning = isOpenRouter && (options.reasoning ?? false)
       const stream = await client.chat.completions.create({
         model: resolvedModelId,
         messages,

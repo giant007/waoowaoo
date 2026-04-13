@@ -82,7 +82,9 @@ export function mergeProvidersForDisplay(
         seenProviderIds.add(savedProvider.id)
 
         const providerKey = getProviderKey(savedProvider.id)
-        const matchedPreset = presetProviders.find((presetProvider) => presetProvider.id === providerKey)
+        const matchedPreset = savedProvider.id === providerKey
+            ? presetProviders.find((presetProvider) => presetProvider.id === providerKey)
+            : undefined
         if (matchedPreset) {
             const apiKey = savedProvider.apiKey || ''
             const providerBaseUrl = providerKey === 'minimax'
@@ -118,6 +120,51 @@ export function mergeProvidersForDisplay(
     }
 
     return merged
+}
+
+function serializeProvidersForSave(providers: Provider[]): Array<{
+    id: string
+    name: string
+    baseUrl?: string
+    apiKey?: string
+    hidden?: boolean
+    apiMode?: 'gemini-sdk' | 'openai-official'
+    gatewayRoute?: 'official' | 'openai-compat'
+}> {
+    const serialized: Array<{
+        id: string
+        name: string
+        baseUrl?: string
+        apiKey?: string
+        hidden?: boolean
+        apiMode?: 'gemini-sdk' | 'openai-official'
+        gatewayRoute?: 'official' | 'openai-compat'
+    }> = []
+    const seenProviderIds = new Set<string>()
+
+    for (const provider of providers) {
+        const id = provider.id.trim()
+        const name = provider.name.trim()
+        if (!id || !name) continue
+
+        const normalizedId = id.toLowerCase()
+        if (seenProviderIds.has(normalizedId)) continue
+        seenProviderIds.add(normalizedId)
+
+        const baseUrl = provider.baseUrl?.trim()
+        const apiKey = provider.apiKey?.trim()
+        serialized.push({
+            id,
+            name,
+            ...(baseUrl ? { baseUrl } : {}),
+            ...(apiKey ? { apiKey } : {}),
+            ...(provider.hidden === true ? { hidden: true } : {}),
+            ...(provider.apiMode ? { apiMode: provider.apiMode } : {}),
+            ...(provider.gatewayRoute ? { gatewayRoute: provider.gatewayRoute } : {}),
+        })
+    }
+
+    return serialized
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -392,12 +439,13 @@ export function useProviders(): UseProvidersReturn {
             const currentWorkflowConcurrency = overrides?.workflowConcurrency ?? latestWorkflowConcurrencyRef.current
             const currentCapabilityDefaults = overrides?.capabilityDefaults ?? latestCapabilityDefaultsRef.current
             const enabledModels = currentModels.filter(m => m.enabled)
+            const serializedProviders = serializeProvidersForSave(currentProviders)
             const res = await apiFetch('/api/user/api-config', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     models: enabledModels,
-                    providers: currentProviders,
+                    providers: serializedProviders,
                     defaultModels: currentDefaultModels,
                     workflowConcurrency: currentWorkflowConcurrency,
                     capabilityDefaults: currentCapabilityDefaults,
